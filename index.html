@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>광명시 공시지가 대시보드</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+  --up: #d9582b; --down: #2b7fd9; --neutral: #98a2b3;
+  --g-res: #3a7bd5; --g-com: #e0803a; --g-ind: #8a6bbf; --g-grn: #3f9b6a;
+  --warn: #b7791f; --warn-bg: #fdf3dc;
+  --radius: 12px; --gap: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151c; --card: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2b3240;
+    --up: #f0845a; --down: #5ba3f0; --neutral: #6b7487;
+    --g-res: #6aa0ee; --g-com: #f0a064; --g-ind: #ad93d6; --g-grn: #62bd8c;
+    --warn: #e5b25d; --warn-bg: #3a2f17;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --card: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2b3240;
+  --up: #f0845a; --down: #5ba3f0; --neutral: #6b7487;
+  --g-res: #6aa0ee; --g-com: #f0a064; --g-ind: #ad93d6; --g-grn: #62bd8c;
+  --warn: #e5b25d; --warn-bg: #3a2f17;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Pretendard', 'Malgun Gothic', system-ui, sans-serif; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px 48px; }
+header.top { padding: 24px 0 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+header.top h1 { margin: 0; font-size: 22px; }
+header.top .sub { color: var(--muted); font-size: 13px; }
+#filters { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); margin-bottom: var(--gap); }
+#filters select, #filters input, #filters button { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+#filters button { cursor: pointer; }
+#filters .seg button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+#filters .seg { display: inline-flex; gap: 0; }
+#filters .seg button { border-radius: 0; }
+#filters .seg button:first-child { border-radius: 8px 0 0 8px; }
+#filters .seg button:last-child { border-radius: 0 8px 8px 0; }
+#filters .tag { background: var(--text); color: var(--bg); border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.grid .full { grid-column: 1 / -1; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.card h2 { margin: 0 0 4px; font-size: 15px; }
+.card .desc { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.card canvas { max-width: 100%; }
+.chart-box { position: relative; height: 300px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.kpi .label { color: var(--muted); font-size: 12px; }
+.kpi .value { font-size: 26px; font-weight: 700; margin: 4px 0; }
+.kpi .delta { font-size: 13px; }
+.up { color: var(--up); } .down { color: var(--down); }
+.badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--warn); margin-right: 4px; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th, table.data td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+table.data th { cursor: pointer; position: sticky; top: 0; background: var(--card); }
+table.data td.num, table.data th.num { text-align: right; }
+.table-scroll { max-height: 520px; overflow: auto; }
+@media (max-width: 800px) {
+  .grid, .kpis { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>광명시 개별공시지가 대시보드</h1>
+    <span class="sub">2025 → 2026 · 402필지 · 단위 원/㎡</span>
+  </header>
+  <div id="filters"></div>
+
+  <section id="sec-kpi" class="kpis"></section>
+  <section class="grid">
+    <div id="sec-change" class="card full"></div>
+  </section>
+  <section class="grid">
+    <div id="sec-compare" class="full" style="display:contents"></div>
+  </section>
+  <section class="grid">
+    <div id="sec-explore" class="full" style="display:contents"></div>
+  </section>
+  <section class="grid">
+    <div id="sec-table" class="card full"></div>
+    <div id="sec-quality" class="card full"></div>
+  </section>
+</div>
+<script>
+window.PARCELS = [{"id":1,"pnu":"4121010100100070000","addr":"경기도 광명시 광명동 7","dong":"광명동","jibun":"7","jimok":"대","area":66,"zone":"일반상업지역","zoneGroup":"상업","p25":6186500,"p26":6624540,"chg":7.08,"flags":[],"excluded":false},{"id":2,"pnu":"4121010100100160000","addr":"경기도 광명시 광명동 16","dong":"광명동","jibun":"16","jimok":"임","area":3301.3,"zone":"보전녹지지역","zoneGroup":"녹지","p25":1024700,"p26":1086910,"chg":6.07,"flags":[],"excluded":false},{"id":3,"pnu":"4121010100100390000","addr":"경기도 광명시 광명동 39","dong":"광명동","jibun":"39","jimok":"답","area":2961.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1001900,"p26":1005420,"chg":0.35,"flags":[],"excluded":false},{"id":4,"pnu":"4121010100100690041","addr":"경기도 광명시 광명동 69-41","dong":"광명동","jibun":"69-41","jimok":"대","area":500,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":7632400,"p26":8018780,"chg":5.06,"flags":[],"excluded":false},{"id":5,"pnu":"4121010100100760021","addr":"경기도 광명시 광명동 76-21","dong":"광명동","jibun":"76-21","jimok":"임","area":2630.4,"zone":"보전녹지지역","zoneGroup":"녹지","p25":561300,"p26":538020,"chg":-4.15,"flags":[],"excluded":false},{"id":6,"pnu":"4121010100100880040","addr":"경기도 광명시 광명동 88-40","dong":"광명동","jibun":"88-40","jimok":"답","area":1301.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2282400,"p26":2359860,"chg":3.39,"flags":[],"excluded":false},{"id":7,"pnu":"4121010100100950000","addr":"경기도 광명시 광명동 95","dong":"광명동","jibun":"95","jimok":"대","area":109.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7292900,"p26":7626090,"chg":4.57,"flags":[],"excluded":false},{"id":8,"pnu":"4121010100101040000","addr":"경기도 광명시 광명동 104","dong":"광명동","jibun":"104","jimok":"대","area":491.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":9027700,"p26":9270750,"chg":2.69,"flags":[],"excluded":false},{"id":9,"pnu":"4121010100101050000","addr":"경기도 광명시 광명동 105","dong":"광명동","jibun":"105","jimok":"도","area":109.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4199600,"p26":4105590,"chg":-2.24,"flags":[],"excluded":false},{"id":10,"pnu":"4121010100101330000","addr":"경기도 광명시 광명동 133","dong":"광명동","jibun":"133","jimok":"임","area":814.9,"zone":"보전녹지지역","zoneGroup":"녹지","p25":867500,"p26":872560,"chg":0.58,"flags":[],"excluded":false},{"id":11,"pnu":"4121010100101360016","addr":"경기도 광명시 광명동 136-16","dong":"광명동","jibun":"136-16","jimok":"대","area":781.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4290100,"p26":4203240,"chg":-2.02,"flags":[],"excluded":false},{"id":12,"pnu":"4121010100101740000","addr":"경기도 광명시 광명동 174","dong":"광명동","jibun":"174","jimok":"대","area":803.2,"zone":"일반상업지역","zoneGroup":"상업","p25":7679300,"p26":8241550,"chg":7.32,"flags":[],"excluded":false},{"id":13,"pnu":"4121010100101860030","addr":"경기도 광명시 광명동 186-30","dong":"광명동","jibun":"186-30","jimok":"도","area":435,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4531800,"p26":4630680,"chg":2.18,"flags":[],"excluded":false},{"id":14,"pnu":"4121010100101880000","addr":"경기도 광명시 광명동 188","dong":"광명동","jibun":"188","jimok":"대","area":464.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6312400,"p26":6264820,"chg":-0.75,"flags":[],"excluded":false},{"id":15,"pnu":"4121010100102010000","addr":"경기도 광명시 광명동 201","dong":"광명동","jibun":"201","jimok":"대","area":790.9,"zone":"준주거지역","zoneGroup":"주거","p25":6823100,"p26":7392600,"chg":8.35,"flags":[],"excluded":false},{"id":16,"pnu":"4121010100102370009","addr":"경기도 광명시 광명동 237-9","dong":"광명동","jibun":"237-9","jimok":"대","area":737.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4762000,"p26":5032530,"chg":5.68,"flags":[],"excluded":false},{"id":17,"pnu":"4121010100102510000","addr":"경기도 광명시 광명동 251","dong":"광명동","jibun":"251","jimok":"도","area":568.6,"zone":"준주거지역","zoneGroup":"주거","p25":4032000,"p26":4044650,"chg":0.31,"flags":[],"excluded":false},{"id":18,"pnu":"4121010100102620000","addr":"경기도 광명시 광명동 262","dong":"광명동","jibun":"262","jimok":"대","area":651.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5091600,"p26":5479780,"chg":7.62,"flags":[],"excluded":false},{"id":19,"pnu":"4121010100102770000","addr":"경기도 광명시 광명동 277","dong":"광명동","jibun":"277","jimok":"학","area":515.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6818400,"p26":6747960,"chg":-1.03,"flags":[],"excluded":false},{"id":20,"pnu":"4121010100102780010","addr":"경기도 광명시 광명동 278-10","dong":"광명동","jibun":"278-10","jimok":"학","area":588.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6212700,"p26":6240520,"chg":0.45,"flags":[],"excluded":false},{"id":21,"pnu":"4121010100102870000","addr":"경기도 광명시 광명동 287","dong":"광명동","jibun":"287","jimok":"답","area":3945,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1574000,"p26":1643310,"chg":4.4,"flags":[],"excluded":false},{"id":22,"pnu":"4121010100102940028","addr":"경기도 광명시 광명동 294-28","dong":"광명동","jibun":"294-28","jimok":"전","area":733.1,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1503600,"p26":1484100,"chg":-1.3,"flags":[],"excluded":false},{"id":23,"pnu":"4121010100102950000","addr":"경기도 광명시 광명동 295","dong":"광명동","jibun":"295","jimok":"도","area":576.1,"zone":"준주거지역","zoneGroup":"주거","p25":5068700,"p26":5382820,"chg":6.2,"flags":[],"excluded":false},{"id":24,"pnu":"4121010100103000000","addr":"경기도 광명시 광명동 300","dong":"광명동","jibun":"300","jimok":"대","area":523.4,"zone":"준주거지역","zoneGroup":"주거","p25":6464300,"p26":6514560,"chg":0.78,"flags":[],"excluded":false},{"id":25,"pnu":"4121010100103150011","addr":"경기도 광명시 광명동 315-11","dong":"광명동","jibun":"315-11","jimok":"대","area":61.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7461900,"p26":8000360,"chg":7.22,"flags":[],"excluded":false},{"id":26,"pnu":"4121010100103200000","addr":"경기도 광명시 광명동 320","dong":"광명동","jibun":"320","jimok":"도","area":185.8,"zone":"준주거지역","zoneGroup":"주거","p25":4506900,"p26":4303050,"chg":-4.52,"flags":[],"excluded":false},{"id":27,"pnu":"4121010100103270000","addr":"경기도 광명시 광명동 327","dong":"광명동","jibun":"327","jimok":"대","area":335.3,"zone":"준주거지역","zoneGroup":"주거","p25":3746700,"p26":4010330,"chg":7.04,"flags":[],"excluded":false},{"id":28,"pnu":"4121010100103370028","addr":"경기도 광명시 광명동 337-28","dong":"광명동","jibun":"337-28","jimok":"공","area":391.7,"zone":"준공업지역","zoneGroup":"공업","p25":3891900,"p26":3906490,"chg":0.37,"flags":[],"excluded":false},{"id":29,"pnu":"4121010100103450000","addr":"경기도 광명시 광명동 345","dong":"광명동","jibun":"345","jimok":"전","area":1672.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2428800,"p26":2510160,"chg":3.35,"flags":[],"excluded":false},{"id":30,"pnu":"4121010100103550000","addr":"경기도 광명시 광명동 355","dong":"광명동","jibun":"355","jimok":"대","area":347.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4615700,"p26":4717030,"chg":2.2,"flags":[],"excluded":false},{"id":31,"pnu":"4121010100103580000","addr":"경기도 광명시 광명동 358","dong":"광명동","jibun":"358","jimok":"대","area":841.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6792700,"p26":6723070,"chg":-1.03,"flags":[],"excluded":false},{"id":32,"pnu":"4121010100103590047","addr":"경기도 광명시 광명동 359-47","dong":"광명동","jibun":"359-47","jimok":"대","area":682,"zone":"일반상업지역","zoneGroup":"상업","p25":4969800,"p26":5299900,"chg":6.64,"flags":[],"excluded":false},{"id":33,"pnu":"4121010100103790050","addr":"경기도 광명시 광명동 379-50","dong":"광명동","jibun":"379-50","jimok":"대","area":479.2,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6235100,"p26":6076700,"chg":-2.54,"flags":[],"excluded":false},{"id":34,"pnu":"4121010100104060000","addr":"경기도 광명시 광명동 406","dong":"광명동","jibun":"406","jimok":"임","area":2271.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":894400,"p26":885680,"chg":-0.97,"flags":[],"excluded":false},{"id":35,"pnu":"4121010100104110000","addr":"경기도 광명시 광명동 411","dong":"광명동","jibun":"411","jimok":"전","area":1611.1,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1612300,"p26":1582520,"chg":-1.85,"flags":[],"excluded":false},{"id":36,"pnu":"4121010100104130000","addr":"경기도 광명시 광명동 413","dong":"광명동","jibun":"413","jimok":"대","area":216.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7747900,"p26":8172660,"chg":5.48,"flags":[],"excluded":false},{"id":37,"pnu":"4121010100104170000","addr":"경기도 광명시 광명동 417","dong":"광명동","jibun":"417","jimok":"임","area":1891.9,"zone":"보전녹지지역","zoneGroup":"녹지","p25":962200,"p26":1010200,"chg":4.99,"flags":[],"excluded":false},{"id":38,"pnu":"4121010100104340043","addr":"경기도 광명시 광명동 434-43","dong":"광명동","jibun":"434-43","jimok":"대","area":287.6,"zone":"준주거지역","zoneGroup":"주거","p25":4985500,"p26":5230350,"chg":4.91,"flags":[],"excluded":false},{"id":39,"pnu":"4121010100104350039","addr":"경기도 광명시 광명동 435-39","dong":"광명동","jibun":"435-39","jimok":"도","area":362.3,"zone":"준주거지역","zoneGroup":"주거","p25":3052200,"p26":3200560,"chg":4.86,"flags":[],"excluded":false},{"id":40,"pnu":"4121010100104350051","addr":"경기도 광명시 광명동 435-51","dong":"광명동","jibun":"435-51","jimok":"학","area":94,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5690900,"p26":5730440,"chg":0.69,"flags":[],"excluded":false},{"id":41,"pnu":"4121010100104420000","addr":"경기도 광명시 광명동 442","dong":"광명동","jibun":"442","jimok":"임","area":1777.4,"zone":"보전녹지지역","zoneGroup":"녹지","p25":630700,"p26":644900,"chg":2.25,"flags":[],"excluded":false},{"id":42,"pnu":"4121010100104490000","addr":"경기도 광명시 광명동 449","dong":"광명동","jibun":"449","jimok":"대","area":96.1,"zone":"준주거지역","zoneGroup":"주거","p25":5258600,"p26":5557730,"chg":5.69,"flags":[],"excluded":false},{"id":43,"pnu":"4121010100104560000","addr":"경기도 광명시 광명동 456","dong":"광명동","jibun":"456","jimok":"대","area":79.3,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":5977900,"p26":6284620,"chg":5.13,"flags":[],"excluded":false},{"id":44,"pnu":"4121010100104600031","addr":"경기도 광명시 광명동 460-31","dong":"광명동","jibun":"460-31","jimok":"대","area":868,"zone":"일반상업지역","zoneGroup":"상업","p25":9281000,"p26":9472810,"chg":2.07,"flags":[],"excluded":false},{"id":45,"pnu":"4121010100104650057","addr":"경기도 광명시 광명동 465-57","dong":"광명동","jibun":"465-57","jimok":"대","area":688.9,"zone":"준주거지역","zoneGroup":"주거","p25":8203900,"p26":8753180,"chg":6.7,"flags":[],"excluded":false},{"id":46,"pnu":"4121010100104790000","addr":"경기도 광명시 광명동 479","dong":"광명동","jibun":"479","jimok":"도","area":729.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4344800,"p26":4284130,"chg":-1.4,"flags":[],"excluded":false},{"id":47,"pnu":"4121010100104840000","addr":"경기도 광명시 광명동 484","dong":"광명동","jibun":"484","jimok":"답","area":3178.2,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1930200,"p26":1940750,"chg":0.55,"flags":[],"excluded":false},{"id":48,"pnu":"4121010100104990000","addr":"경기도 광명시 광명동 499","dong":"광명동","jibun":"499","jimok":"답","area":2116.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1205800,"p26":1254150,"chg":4.01,"flags":[],"excluded":false},{"id":49,"pnu":"4121010100105050000","addr":"경기도 광명시 광명동 505","dong":"광명동","jibun":"505","jimok":"대","area":630.2,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5679500,"p26":6017390,"chg":5.95,"flags":[],"excluded":false},{"id":50,"pnu":"4121010100105200016","addr":"경기도 광명시 광명동 520-16","dong":"광명동","jibun":"520-16","jimok":"대","area":101.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6134000,"p26":6461970,"chg":5.35,"flags":[],"excluded":false},{"id":51,"pnu":"4121010100105270000","addr":"경기도 광명시 광명동 527","dong":"광명동","jibun":"527","jimok":"대","area":798.6,"zone":"준주거지역","zoneGroup":"주거","p25":6308400,"p26":6398780,"chg":1.43,"flags":[],"excluded":false},{"id":52,"pnu":"4121010100105360000","addr":"경기도 광명시 광명동 536","dong":"광명동","jibun":"536","jimok":"전","area":2138.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1367000,"p26":1478770,"chg":8.18,"flags":[],"excluded":false},{"id":53,"pnu":"4121010100105400048","addr":"경기도 광명시 광명동 540-48","dong":"광명동","jibun":"540-48","jimok":"대","area":452.2,"zone":"일반상업지역","zoneGroup":"상업","p25":7822900,"p26":7575810,"chg":-3.16,"flags":[],"excluded":false},{"id":54,"pnu":"4121010100105470000","addr":"경기도 광명시 광명동 547","dong":"광명동","jibun":"547","jimok":"대","area":253.9,"zone":"일반상업지역","zoneGroup":"상업","p25":4595700,"p26":4328090,"chg":-5.82,"flags":[],"excluded":false},{"id":55,"pnu":"4121010100105570042","addr":"경기도 광명시 광명동 557-42","dong":"광명동","jibun":"557-42","jimok":"전","area":2120.5,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2234300,"p26":2315360,"chg":3.63,"flags":[],"excluded":false},{"id":56,"pnu":"4121010100105970000","addr":"경기도 광명시 광명동 597","dong":"광명동","jibun":"597","jimok":"대","area":724.8,"zone":"일반상업지역","zoneGroup":"상업","p25":7655800,"p26":8192920,"chg":7.02,"flags":[],"excluded":false},{"id":57,"pnu":"4121010100106000007","addr":"경기도 광명시 광명동 600-7","dong":"광명동","jibun":"600-7","jimok":"대","area":336.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4265500,"p26":4074240,"chg":-4.48,"flags":[],"excluded":false},{"id":58,"pnu":"4121010100106010000","addr":"경기도 광명시 광명동 601","dong":"광명동","jibun":"601","jimok":"도","area":603.7,"zone":"준주거지역","zoneGroup":"주거","p25":2708300,"p26":2812870,"chg":3.86,"flags":[],"excluded":false},{"id":59,"pnu":"4121010100106120003","addr":"경기도 광명시 광명동 612-3","dong":"광명동","jibun":"612-3","jimok":"임","area":1501.1,"zone":"보전녹지지역","zoneGroup":"녹지","p25":620900,"p26":616210,"chg":-0.76,"flags":[],"excluded":false},{"id":60,"pnu":"4121010100106150006","addr":"경기도 광명시 광명동 615-6","dong":"광명동","jibun":"615-6","jimok":"임","area":885.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":729400,"p26":741330,"chg":1.64,"flags":[],"excluded":false},{"id":61,"pnu":"4121010200100090000","addr":"경기도 광명시 철산동 9","dong":"철산동","jibun":"9","jimok":"전","area":3182.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1978500,"p26":1990760,"chg":0.62,"flags":[],"excluded":false},{"id":62,"pnu":"4121010200100140000","addr":"경기도 광명시 철산동 14","dong":"철산동","jibun":"14","jimok":"대","area":358.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":9379700,"p26":10035150,"chg":6.99,"flags":[],"excluded":false},{"id":63,"pnu":"4121010200100180006","addr":"경기도 광명시 철산동 18-6","dong":"철산동","jibun":"18-6","jimok":"대","area":780.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":10382800,"p26":10767470,"chg":3.7,"flags":[],"excluded":false},{"id":64,"pnu":"4121010200100190026","addr":"경기도 광명시 철산동 19-26","dong":"철산동","jibun":"19-26","jimok":"대","area":81,"zone":"준주거지역","zoneGroup":"주거","p25":8070600,"p26":7772520,"chg":-3.69,"flags":[],"excluded":false},{"id":65,"pnu":"4121010200100530000","addr":"경기도 광명시 철산동 53","dong":"철산동","jibun":"53","jimok":"임","area":1251,"zone":"보전녹지지역","zoneGroup":"녹지","p25":701500,"p26":744490,"chg":6.13,"flags":[],"excluded":false},{"id":66,"pnu":"4121010200100580000","addr":"경기도 광명시 철산동 58","dong":"철산동","jibun":"58","jimok":"임","area":3635.1,"zone":"보전녹지지역","zoneGroup":"녹지","p25":971300,"p26":1028930,"chg":5.93,"flags":[],"excluded":false},{"id":67,"pnu":"4121010200100620001","addr":"경기도 광명시 철산동 62-1","dong":"철산동","jibun":"62-1","jimok":"도","area":528.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4520200,"p26":4745550,"chg":4.99,"flags":[],"excluded":false},{"id":68,"pnu":"4121010200100750024","addr":"경기도 광명시 철산동 75-24","dong":"철산동","jibun":"75-24","jimok":"대","area":456.6,"zone":"일반상업지역","zoneGroup":"상업","p25":8370200,"p26":8266880,"chg":-1.23,"flags":[],"excluded":false},{"id":69,"pnu":"4121010200100760000","addr":"경기도 광명시 철산동 76","dong":"철산동","jibun":"76","jimok":"대","area":726.2,"zone":"일반상업지역","zoneGroup":"상업","p25":6470600,"p26":6736,"chg":-99.9,"flags":["scale"],"excluded":true},{"id":70,"pnu":"4121010200100850009","addr":"경기도 광명시 철산동 85-9","dong":"철산동","jibun":"85-9","jimok":"대","area":663.2,"zone":"준주거지역","zoneGroup":"주거","p25":9882800,"p26":9408630,"chg":-4.8,"flags":[],"excluded":false},{"id":71,"pnu":"4121010200101350000","addr":"경기도 광명시 철산동 135","dong":"철산동","jibun":"135","jimok":"대","area":158.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":9503500,"p26":8958850,"chg":-5.73,"flags":[],"excluded":false},{"id":72,"pnu":"4121010200101420000","addr":"경기도 광명시 철산동 142","dong":"철산동","jibun":"142","jimok":"대","area":761.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7283100,"p26":7311280,"chg":0.39,"flags":[],"excluded":false},{"id":73,"pnu":"4121010200101450000","addr":"경기도 광명시 철산동 145","dong":"철산동","jibun":"145","jimok":"대","area":206.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":7191000,"p26":7329910,"chg":1.93,"flags":[],"excluded":false},{"id":74,"pnu":"4121010200101520000","addr":"경기도 광명시 철산동 152","dong":"철산동","jibun":"152","jimok":"대","area":774.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":8736400,"p26":9374090,"chg":7.3,"flags":[],"excluded":false},{"id":75,"pnu":"4121010200101530045","addr":"경기도 광명시 철산동 153-45","dong":"철산동","jibun":"153-45","jimok":"도","area":382.3,"zone":"준주거지역","zoneGroup":"주거","p25":7669800,"p26":8087960,"chg":5.45,"flags":[],"excluded":false},{"id":76,"pnu":"4121010200101630000","addr":"경기도 광명시 철산동 163","dong":"철산동","jibun":"163","jimok":"대","area":181.9,"zone":"일반상업지역","zoneGroup":"상업","p25":9752200,"p26":9289970,"chg":-4.74,"flags":[],"excluded":false},{"id":77,"pnu":"4121010200101740000","addr":"경기도 광명시 철산동 174","dong":"철산동","jibun":"174","jimok":"전","area":2122.4,"zone":"생산녹지지역","zoneGroup":"녹지","p25":2744500,"p26":2618810,"chg":-4.58,"flags":[],"excluded":false},{"id":78,"pnu":"4121010200101750039","addr":"경기도 광명시 철산동 175-39","dong":"철산동","jibun":"175-39","jimok":"전","area":789.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1840400,"p26":1880100,"chg":2.16,"flags":[],"excluded":false},{"id":79,"pnu":"4121010200101860014","addr":"경기도 광명시 철산동 186-14","dong":"철산동","jibun":"186-14","jimok":"잡","area":500.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3334500,"p26":3578800,"chg":7.33,"flags":[],"excluded":false},{"id":80,"pnu":"4121010200101880000","addr":"경기도 광명시 철산동 188","dong":"철산동","jibun":"188","jimok":"전","area":889,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1859500,"p26":1761080,"chg":-5.29,"flags":[],"excluded":false},{"id":81,"pnu":"4121010200101910013","addr":"경기도 광명시 철산동 191-13","dong":"철산동","jibun":"191-13","jimok":"대","area":655.9,"zone":"일반상업지역","zoneGroup":"상업","p25":7844300,"p26":8467990,"chg":7.95,"flags":[],"excluded":false},{"id":82,"pnu":"4121010200102120000","addr":"경기도 광명시 철산동 212","dong":"철산동","jibun":"212","jimok":"대","area":773.2,"zone":"일반상업지역","zoneGroup":"상업","p25":6704600,"p26":6373440,"chg":-4.94,"flags":[],"excluded":false},{"id":83,"pnu":"4121010200102200000","addr":"경기도 광명시 철산동 220","dong":"철산동","jibun":"220","jimok":"대","area":738.3,"zone":"일반상업지역","zoneGroup":"상업","p25":4568500,"p26":4967670,"chg":8.74,"flags":[],"excluded":false},{"id":84,"pnu":"4121010200102300000","addr":"경기도 광명시 철산동 230","dong":"철산동","jibun":"230","jimok":"전","area":3175.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2349200,"p26":2447590,"chg":4.19,"flags":[],"excluded":false},{"id":85,"pnu":"4121010200102320000","addr":"경기도 광명시 철산동 232","dong":"철산동","jibun":"232","jimok":"대","area":233,"zone":"일반상업지역","zoneGroup":"상업","p25":9456200,"p26":10122790,"chg":7.05,"flags":[],"excluded":false},{"id":86,"pnu":"4121010200102540039","addr":"경기도 광명시 철산동 254-39","dong":"철산동","jibun":"254-39","jimok":"대","area":844.6,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5663400,"p26":6044190,"chg":6.72,"flags":[],"excluded":false},{"id":87,"pnu":"4121010200102660000","addr":"경기도 광명시 철산동 266","dong":"철산동","jibun":"266","jimok":"공","area":87.1,"zone":"준공업지역","zoneGroup":"공업","p25":9954000,"p26":9936770,"chg":-0.17,"flags":[],"excluded":false},{"id":88,"pnu":"4121010200102720044","addr":"경기도 광명시 철산동 272-44","dong":"철산동","jibun":"272-44","jimok":"답","area":1725,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1822700,"p26":1807660,"chg":-0.83,"flags":[],"excluded":false},{"id":89,"pnu":"4121010200102760000","addr":"경기도 광명시 철산동 276","dong":"철산동","jibun":"276","jimok":"대","area":177.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7615400,"p26":7866430,"chg":3.3,"flags":[],"excluded":false},{"id":90,"pnu":"4121010200102770045","addr":"경기도 광명시 철산동 277-45","dong":"철산동","jibun":"277-45","jimok":"학","area":115.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3897500,"p26":3829860,"chg":-1.74,"flags":[],"excluded":false},{"id":91,"pnu":"4121010200103000000","addr":"경기도 광명시 철산동 300","dong":"철산동","jibun":"300","jimok":"대","area":216,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":11094400,"p26":10865000,"chg":-2.07,"flags":[],"excluded":false},{"id":92,"pnu":"4121010200103040059","addr":"경기도 광명시 철산동 304-59","dong":"철산동","jibun":"304-59","jimok":"전","area":1492.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":3076000,"p26":3313780,"chg":7.73,"flags":[],"excluded":false},{"id":93,"pnu":"4121010200103160021","addr":"경기도 광명시 철산동 316-21","dong":"철산동","jibun":"316-21","jimok":"대","area":595.3,"zone":"일반상업지역","zoneGroup":"상업","p25":7307100,"p26":7502930,"chg":2.68,"flags":[],"excluded":false},{"id":94,"pnu":"4121010200103210000","addr":"경기도 광명시 철산동 321","dong":"철산동","jibun":"321","jimok":"전","area":1031.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1452400,"p26":1400560,"chg":-3.57,"flags":[],"excluded":false},{"id":95,"pnu":"4121010200103350000","addr":"경기도 광명시 철산동 335","dong":"철산동","jibun":"335","jimok":"학","area":348,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5515800,"p26":11858970,"chg":115,"flags":["extreme"],"excluded":true},{"id":96,"pnu":"4121010200103450000","addr":"경기도 광명시 철산동 345","dong":"철산동","jibun":"345","jimok":"답","area":1402.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1317100,"p26":1294330,"chg":-1.73,"flags":[],"excluded":false},{"id":97,"pnu":"4121010200103570058","addr":"경기도 광명시 철산동 357-58","dong":"철산동","jibun":"357-58","jimok":"도","area":842.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3939500,"p26":4162970,"chg":5.67,"flags":[],"excluded":false},{"id":98,"pnu":"4121010200103820054","addr":"경기도 광명시 철산동 382-54","dong":"철산동","jibun":"382-54","jimok":"대","area":716.8,"zone":"일반상업지역","zoneGroup":"상업","p25":9456400,"p26":10194740,"chg":7.81,"flags":[],"excluded":false},{"id":99,"pnu":"4121010200103870000","addr":"경기도 광명시 철산동 387","dong":"철산동","jibun":"387","jimok":"대","area":542.1,"zone":"준주거지역","zoneGroup":"주거","p25":7178400,"p26":7674750,"chg":6.91,"flags":[],"excluded":false},{"id":100,"pnu":"4121010200103890000","addr":"경기도 광명시 철산동 389","dong":"철산동","jibun":"389","jimok":"대","area":878.1,"zone":"일반상업지역","zoneGroup":"상업","p25":10601600,"p26":10119100,"chg":-4.55,"flags":[],"excluded":false},{"id":101,"pnu":"4121010200104090000","addr":"경기도 광명시 철산동 409","dong":"철산동","jibun":"409","jimok":"공","area":629.2,"zone":"준공업지역","zoneGroup":"공업","p25":6197400,"p26":6044240,"chg":-2.47,"flags":[],"excluded":false},{"id":102,"pnu":"4121010200104320000","addr":"경기도 광명시 철산동 432","dong":"철산동","jibun":"432","jimok":"전","area":1545.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":3266700,"p26":3515690,"chg":7.62,"flags":[],"excluded":false},{"id":103,"pnu":"4121010200104390000","addr":"경기도 광명시 철산동 439","dong":"철산동","jibun":"439","jimok":"도","area":233.8,"zone":"준주거지역","zoneGroup":"주거","p25":3572500,"p26":3521360,"chg":-1.43,"flags":[],"excluded":false},{"id":104,"pnu":"4121010200104430038","addr":"경기도 광명시 철산동 443-38","dong":"철산동","jibun":"443-38","jimok":"전","area":1508.8,"zone":"생산녹지지역","zoneGroup":"녹지","p25":2234000,"p26":2288320,"chg":2.43,"flags":[],"excluded":false},{"id":105,"pnu":"4121010200104530012","addr":"경기도 광명시 철산동 453-12","dong":"철산동","jibun":"453-12","jimok":"대","area":140.3,"zone":"준주거지역","zoneGroup":"주거","p25":7708300,"p26":7605340,"chg":-1.34,"flags":[],"excluded":false},{"id":106,"pnu":"4121010200104640000","addr":"경기도 광명시 철산동 464","dong":"철산동","jibun":"464","jimok":"임","area":379.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1264900,"p26":1222170,"chg":-3.38,"flags":[],"excluded":false},{"id":107,"pnu":"4121010200104660000","addr":"경기도 광명시 철산동 466","dong":"철산동","jibun":"466","jimok":"대","area":508.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5221800,"p26":4975290,"chg":-4.72,"flags":[],"excluded":false},{"id":108,"pnu":"4121010200104680058","addr":"경기도 광명시 철산동 468-58","dong":"철산동","jibun":"468-58","jimok":"임","area":2220.2,"zone":"보전녹지지역","zoneGroup":"녹지","p25":711100,"p26":758590,"chg":6.68,"flags":[],"excluded":false},{"id":109,"pnu":"4121010200104860004","addr":"경기도 광명시 철산동 486-4","dong":"철산동","jibun":"486-4","jimok":"대","area":702.7,"zone":"일반상업지역","zoneGroup":"상업","p25":6375600,"p26":6681,"chg":-99.9,"flags":["scale"],"excluded":true},{"id":110,"pnu":"4121010200104930000","addr":"경기도 광명시 철산동 493","dong":"철산동","jibun":"493","jimok":"대","area":76.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6606600,"p26":6672110,"chg":0.99,"flags":[],"excluded":false},{"id":111,"pnu":"4121010200104990000","addr":"경기도 광명시 철산동 499","dong":"철산동","jibun":"499","jimok":"대","area":387.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5721700,"p26":6130790,"chg":7.15,"flags":[],"excluded":false},{"id":112,"pnu":"4121010200105180000","addr":"경기도 광명시 철산동 518","dong":"철산동","jibun":"518","jimok":"잡","area":793.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3600800,"p26":3787980,"chg":5.2,"flags":[],"excluded":false},{"id":113,"pnu":"4121010200105360038","addr":"경기도 광명시 철산동 536-38","dong":"철산동","jibun":"536-38","jimok":"답","area":1950.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2359000,"p26":2260310,"chg":-4.18,"flags":[],"excluded":false},{"id":114,"pnu":"4121010200105640000","addr":"경기도 광명시 철산동 564","dong":"철산동","jibun":"564","jimok":"대","area":216.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6521200,"p26":6960810,"chg":6.74,"flags":[],"excluded":false},{"id":115,"pnu":"4121010200105670043","addr":"경기도 광명시 철산동 567-43","dong":"철산동","jibun":"567-43","jimok":"대","area":153.7,"zone":"준주거지역","zoneGroup":"주거","p25":7623900,"p26":8048530,"chg":5.57,"flags":[],"excluded":false},{"id":116,"pnu":"4121010200105810000","addr":"경기도 광명시 철산동 581","dong":"철산동","jibun":"581","jimok":"답","area":1319.9,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1455200,"p26":1398460,"chg":-3.9,"flags":[],"excluded":false},{"id":117,"pnu":"4121010200105880000","addr":"경기도 광명시 철산동 588","dong":"철산동","jibun":"588","jimok":"대","area":192.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":10281900,"p26":10999500,"chg":6.98,"flags":[],"excluded":false},{"id":118,"pnu":"4121010200105920000","addr":"경기도 광명시 철산동 592","dong":"철산동","jibun":"592","jimok":"학","area":634.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":7401700,"p26":7761700,"chg":4.86,"flags":[],"excluded":false},{"id":119,"pnu":"4121010200106040000","addr":"경기도 광명시 철산동 604","dong":"철산동","jibun":"604","jimok":"대","area":790.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":8016700,"p26":8713430,"chg":8.69,"flags":[],"excluded":false},{"id":120,"pnu":"4121010200106160022","addr":"경기도 광명시 철산동 616-22","dong":"철산동","jibun":"616-22","jimok":"학","area":793.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":8094300,"p26":8320420,"chg":2.79,"flags":[],"excluded":false},{"id":121,"pnu":"4121010300100020000","addr":"경기도 광명시 하안동 2","dong":"하안동","jibun":"2","jimok":"전","area":1950,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1760200,"p26":1704030,"chg":-3.19,"flags":[],"excluded":false},{"id":122,"pnu":"4121010300100070000","addr":"경기도 광명시 하안동 7","dong":"하안동","jibun":"7","jimok":"대","area":186,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6533700,"p26":6686180,"chg":2.33,"flags":[],"excluded":false},{"id":123,"pnu":"4121010300100090020","addr":"경기도 광명시 하안동 9-20","dong":"하안동","jibun":"9-20","jimok":"답","area":3639.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":961900,"p26":1006610,"chg":4.65,"flags":[],"excluded":false},{"id":124,"pnu":"4121010300100100045","addr":"경기도 광명시 하안동 10-45","dong":"하안동","jibun":"10-45","jimok":"임","area":2296.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":994700,"p26":1002290,"chg":0.76,"flags":[],"excluded":false},{"id":125,"pnu":"4121010300100180000","addr":"경기도 광명시 하안동 18","dong":"하안동","jibun":"18","jimok":"대","area":521.4,"zone":"일반상업지역","zoneGroup":"상업","p25":6297500,"p26":6130950,"chg":-2.64,"flags":[],"excluded":false},{"id":126,"pnu":"4121010300100410016","addr":"경기도 광명시 하안동 41-16","dong":"하안동","jibun":"41-16","jimok":"대","area":301.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":5207900,"p26":4984740,"chg":-4.29,"flags":[],"excluded":false},{"id":127,"pnu":"4121010300100730033","addr":"경기도 광명시 하안동 73-33","dong":"하안동","jibun":"73-33","jimok":"공","area":88.6,"zone":"일반공업지역","zoneGroup":"공업","p25":4313500,"p26":4457500,"chg":3.34,"flags":[],"excluded":false},{"id":128,"pnu":"4121010300100790000","addr":"경기도 광명시 하안동 79","dong":"하안동","jibun":"79","jimok":"대","area":311.4,"zone":"일반상업지역","zoneGroup":"상업","p25":3567700,"p26":3700360,"chg":3.72,"flags":[],"excluded":false},{"id":129,"pnu":"4121010300101140000","addr":"경기도 광명시 하안동 114","dong":"하안동","jibun":"114","jimok":"대","area":762.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4316800,"p26":4635550,"chg":7.38,"flags":[],"excluded":false},{"id":130,"pnu":"4121010300101170004","addr":"경기도 광명시 하안동 117-4","dong":"하안동","jibun":"117-4","jimok":"도","area":523.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":5759900,"p26":6263290,"chg":8.74,"flags":[],"excluded":false},{"id":131,"pnu":"4121010300101960000","addr":"경기도 광명시 하안동 196","dong":"하안동","jibun":"196","jimok":"대","area":344.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4614700,"p26":4694810,"chg":1.74,"flags":[],"excluded":false},{"id":132,"pnu":"4121010300102000000","addr":"경기도 광명시 하안동 200","dong":"하안동","jibun":"200","jimok":"대","area":452.9,"zone":"준주거지역","zoneGroup":"주거","p25":6503300,"p26":6443890,"chg":-0.91,"flags":[],"excluded":false},{"id":133,"pnu":"4121010300102040053","addr":"경기도 광명시 하안동 204-53","dong":"하안동","jibun":"204-53","jimok":"대","area":454.9,"zone":"준주거지역","zoneGroup":"주거","p25":4959300,"p26":5017380,"chg":1.17,"flags":[],"excluded":false},{"id":134,"pnu":"4121010300102120018","addr":"경기도 광명시 하안동 212-18","dong":"하안동","jibun":"212-18","jimok":"대","area":355.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":7276900,"p26":6971990,"chg":-4.19,"flags":[],"excluded":false},{"id":135,"pnu":"4121010300102170000","addr":"경기도 광명시 하안동 217","dong":"하안동","jibun":"217","jimok":"임","area":2911.9,"zone":"자연녹지지역","zoneGroup":"녹지","p25":754300,"p26":744830,"chg":-1.26,"flags":[],"excluded":false},{"id":136,"pnu":"4121010300102220045","addr":"경기도 광명시 하안동 222-45","dong":"하안동","jibun":"222-45","jimok":"대","area":519.2,"zone":"준주거지역","zoneGroup":"주거","p25":8074300,"p26":8752830,"chg":8.4,"flags":[],"excluded":false},{"id":137,"pnu":"4121010300102290024","addr":"경기도 광명시 하안동 229-24","dong":"하안동","jibun":"229-24","jimok":"전","area":1953.2,"zone":"생산녹지지역","zoneGroup":"녹지","p25":2360900,"p26":2469170,"chg":4.59,"flags":[],"excluded":false},{"id":138,"pnu":"4121010300102390024","addr":"경기도 광명시 하안동 239-24","dong":"하안동","jibun":"239-24","jimok":"답","area":3156.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1240300,"p26":1349840,"chg":8.83,"flags":[],"excluded":false},{"id":139,"pnu":"4121010300102440000","addr":"경기도 광명시 하안동 244","dong":"하안동","jibun":"244","jimok":"대","area":475.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3383500,"p26":3600060,"chg":6.4,"flags":[],"excluded":false},{"id":140,"pnu":"4121010300102480000","addr":"경기도 광명시 하안동 248","dong":"하안동","jibun":"248","jimok":"대","area":246.5,"zone":"준주거지역","zoneGroup":"주거","p25":3371900,"p26":3559100,"chg":5.55,"flags":[],"excluded":false},{"id":141,"pnu":"4121010300102600059","addr":"경기도 광명시 하안동 260-59","dong":"하안동","jibun":"260-59","jimok":"전","area":380.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2157800,"p26":2211410,"chg":2.48,"flags":[],"excluded":false},{"id":142,"pnu":"4121010300102620021","addr":"경기도 광명시 하안동 262-21","dong":"하안동","jibun":"262-21","jimok":"대","area":756.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":8287000,"p26":7823460,"chg":-5.59,"flags":[],"excluded":false},{"id":143,"pnu":"4121010300102730000","addr":"경기도 광명시 하안동 273","dong":"하안동","jibun":"273","jimok":"대","area":317.9,"zone":"준주거지역","zoneGroup":"주거","p25":7535500,"p26":7845280,"chg":4.11,"flags":[],"excluded":false},{"id":144,"pnu":"4121010300102860000","addr":"경기도 광명시 하안동 286","dong":"하안동","jibun":"286","jimok":"전","area":904.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1832200,"p26":1968010,"chg":7.41,"flags":[],"excluded":false},{"id":145,"pnu":"4121010300103110016","addr":"경기도 광명시 하안동 311-16","dong":"하안동","jibun":"311-16","jimok":"대","area":671.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3419100,"p26":3722830,"chg":8.88,"flags":[],"excluded":false},{"id":146,"pnu":"4121010300103200000","addr":"경기도 광명시 하안동 320","dong":"하안동","jibun":"320","jimok":"도","area":269.3,"zone":"준주거지역","zoneGroup":"주거","p25":4751300,"p26":4474260,"chg":-5.83,"flags":[],"excluded":false},{"id":147,"pnu":"4121010300103200054","addr":"경기도 광명시 하안동 320-54","dong":"하안동","jibun":"320-54","jimok":"대","area":443.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7911700,"p26":8027540,"chg":1.46,"flags":[],"excluded":false},{"id":148,"pnu":"4121010300103330058","addr":"경기도 광명시 하안동 333-58","dong":"하안동","jibun":"333-58","jimok":"전","area":1502.1,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1467600,"p26":1516550,"chg":3.34,"flags":[],"excluded":false},{"id":149,"pnu":"4121010300103390011","addr":"경기도 광명시 하안동 339-11","dong":"하안동","jibun":"339-11","jimok":"대","area":113.4,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6799400,"p26":7397630,"chg":8.8,"flags":[],"excluded":false},{"id":150,"pnu":"4121010300103540000","addr":"경기도 광명시 하안동 354","dong":"하안동","jibun":"354","jimok":"대","area":318.3,"zone":"준주거지역","zoneGroup":"주거","p25":6022200,"p26":6436370,"chg":6.88,"flags":[],"excluded":false},{"id":151,"pnu":"4121010300103620000","addr":"경기도 광명시 하안동 362","dong":"하안동","jibun":"362","jimok":"잡","area":453.5,"zone":"자연녹지지역","zoneGroup":"녹지","p25":3208100,"p26":3433090,"chg":7.01,"flags":[],"excluded":false},{"id":152,"pnu":"4121010300103860013","addr":"경기도 광명시 하안동 386-13","dong":"하안동","jibun":"386-13","jimok":"전","area":439.5,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1458500,"p26":1568830,"chg":7.56,"flags":[],"excluded":false},{"id":153,"pnu":"4121010300103950000","addr":"경기도 광명시 하안동 395","dong":"하안동","jibun":"395","jimok":"대","area":100,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7733800,"p26":7420260,"chg":-4.05,"flags":[],"excluded":false},{"id":154,"pnu":"4121010300104170000","addr":"경기도 광명시 하안동 417","dong":"하안동","jibun":"417","jimok":"대","area":160.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6422100,"p26":6610260,"chg":2.93,"flags":[],"excluded":false},{"id":155,"pnu":"4121010300104210034","addr":"경기도 광명시 하안동 421-34","dong":"하안동","jibun":"421-34","jimok":"공","area":379,"zone":"준공업지역","zoneGroup":"공업","p25":7395900,"p26":7650170,"chg":3.44,"flags":[],"excluded":false},{"id":156,"pnu":"4121010300104370000","addr":"경기도 광명시 하안동 437","dong":"하안동","jibun":"437","jimok":"대","area":671.3,"zone":"준주거지역","zoneGroup":"주거","p25":4530400,"p26":4696110,"chg":3.66,"flags":[],"excluded":false},{"id":157,"pnu":"4121010300104380000","addr":"경기도 광명시 하안동 438","dong":"하안동","jibun":"438","jimok":"대","area":427.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3569500,"p26":3375640,"chg":-5.43,"flags":[],"excluded":false},{"id":158,"pnu":"4121010300104720041","addr":"경기도 광명시 하안동 472-41","dong":"하안동","jibun":"472-41","jimok":"대","area":827.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6639500,"p26":6328070,"chg":-4.69,"flags":[],"excluded":false},{"id":159,"pnu":"4121010300104740000","addr":"경기도 광명시 하안동 474","dong":"하안동","jibun":"474","jimok":"전","area":361.8,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1333400,"p26":1402100,"chg":5.15,"flags":[],"excluded":false},{"id":160,"pnu":"4121010300104770000","addr":"경기도 광명시 하안동 477","dong":"하안동","jibun":"477","jimok":"공","area":788.5,"zone":"준공업지역","zoneGroup":"공업","p25":3167400,"p26":3051020,"chg":-3.67,"flags":[],"excluded":false},{"id":161,"pnu":"4121010300104790000","addr":"경기도 광명시 하안동 479","dong":"하안동","jibun":"479","jimok":"학","area":884.2,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3107700,"p26":3174210,"chg":2.14,"flags":[],"excluded":false},{"id":162,"pnu":"4121010300104810000","addr":"경기도 광명시 하안동 481","dong":"하안동","jibun":"481","jimok":"답","area":3307.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1034300,"p26":1060760,"chg":2.56,"flags":[],"excluded":false},{"id":163,"pnu":"4121010300104830039","addr":"경기도 광명시 하안동 483-39","dong":"하안동","jibun":"483-39","jimok":"학","area":698.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6736900,"p26":7281840,"chg":8.09,"flags":[],"excluded":false},{"id":164,"pnu":"4121010300104840000","addr":"경기도 광명시 하안동 484","dong":"하안동","jibun":"484","jimok":"대","area":697.9,"zone":"일반상업지역","zoneGroup":"상업","p25":4669800,"p26":4576420,"chg":-2,"flags":[],"excluded":false},{"id":165,"pnu":"4121010300104840038","addr":"경기도 광명시 하안동 484-38","dong":"하안동","jibun":"484-38","jimok":"전","area":2625.7,"zone":"생산녹지지역","zoneGroup":"녹지","p25":2012700,"p26":2015570,"chg":0.14,"flags":[],"excluded":false},{"id":166,"pnu":"4121010100104060000","addr":"경기도 광명시 광명동 406","dong":"광명동","jibun":"406","jimok":"임","area":2271.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":894400,"p26":885680,"chg":-0.97,"flags":["dup"],"excluded":true},{"id":167,"pnu":"4121010300104880026","addr":"경기도 광명시 하안동 488-26","dong":"하안동","jibun":"488-26","jimok":"잡","area":681.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2733700,"p26":2667810,"chg":-2.41,"flags":[],"excluded":false},{"id":168,"pnu":"4121010300104960021","addr":"경기도 광명시 하안동 496-21","dong":"하안동","jibun":"496-21","jimok":"도","area":143.3,"zone":"준주거지역","zoneGroup":"주거","p25":3446800,"p26":3547190,"chg":2.91,"flags":[],"excluded":false},{"id":169,"pnu":"4121010300105050000","addr":"경기도 광명시 하안동 505","dong":"하안동","jibun":"505","jimok":"잡","area":587,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2214500,"p26":2173140,"chg":-1.87,"flags":[],"excluded":false},{"id":170,"pnu":"4121010300105080000","addr":"경기도 광명시 하안동 508","dong":"하안동","jibun":"508","jimok":"대","area":790.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4212600,"p26":4461880,"chg":5.92,"flags":[],"excluded":false},{"id":171,"pnu":"4121010300105170000","addr":"경기도 광명시 하안동 517","dong":"하안동","jibun":"517","jimok":"도","area":146.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":5230700,"p26":4987050,"chg":-4.66,"flags":[],"excluded":false},{"id":172,"pnu":"4121010300105220017","addr":"경기도 광명시 하안동 522-17","dong":"하안동","jibun":"522-17","jimok":"답","area":1661.9,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1026300,"p26":1055910,"chg":2.89,"flags":[],"excluded":false},{"id":173,"pnu":"4121010300105530000","addr":"경기도 광명시 하안동 553","dong":"하안동","jibun":"553","jimok":"답","area":3104.2,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1883000,"p26":1997330,"chg":6.07,"flags":[],"excluded":false},{"id":174,"pnu":"4121010300105610000","addr":"경기도 광명시 하안동 561","dong":"하안동","jibun":"561","jimok":"대","area":882,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6466900,"p26":6412420,"chg":-0.84,"flags":[],"excluded":false},{"id":175,"pnu":"4121010300105640059","addr":"경기도 광명시 하안동 564-59","dong":"하안동","jibun":"564-59","jimok":"전","area":1141.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1841900,"p26":1753650,"chg":-4.79,"flags":[],"excluded":false},{"id":176,"pnu":"4121010300105660000","addr":"경기도 광명시 하안동 566","dong":"하안동","jibun":"566","jimok":"대","area":300.6,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3560400,"p26":3690530,"chg":3.65,"flags":[],"excluded":false},{"id":177,"pnu":"4121010300105930000","addr":"경기도 광명시 하안동 593","dong":"하안동","jibun":"593","jimok":"임","area":300,"zone":"보전녹지지역","zoneGroup":"녹지","p25":544600,"p26":553320,"chg":1.6,"flags":[],"excluded":false},{"id":178,"pnu":"4121010300106020000","addr":"경기도 광명시 하안동 602","dong":"하안동","jibun":"602","jimok":"전","area":441.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1487000,"p26":1402080,"chg":-5.71,"flags":[],"excluded":false},{"id":179,"pnu":"4121010300106060000","addr":"경기도 광명시 하안동 606","dong":"하안동","jibun":"606","jimok":"대","area":640.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6862100,"p26":6798610,"chg":-0.93,"flags":[],"excluded":false},{"id":180,"pnu":"4121010300106080000","addr":"경기도 광명시 하안동 608","dong":"하안동","jibun":"608","jimok":"대","area":298.7,"zone":"준주거지역","zoneGroup":"주거","p25":7707500,"p26":5472320,"chg":-29,"flags":[],"excluded":false},{"id":181,"pnu":"4121010300106120055","addr":"경기도 광명시 하안동 612-55","dong":"하안동","jibun":"612-55","jimok":"답","area":2029.5,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1179800,"p26":1248340,"chg":5.81,"flags":[],"excluded":false},{"id":182,"pnu":"4121010400100100058","addr":"경기도 광명시 소하동 10-58","dong":"소하동","jibun":"10-58","jimok":"대","area":426.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2919100,"p26":2923000,"chg":0.13,"flags":[],"excluded":false},{"id":183,"pnu":"4121010400100170000","addr":"경기도 광명시 소하동 17","dong":"소하동","jibun":"17","jimok":"대","area":653.7,"zone":"일반상업지역","zoneGroup":"상업","p25":6281200,"p26":6376740,"chg":1.52,"flags":[],"excluded":false},{"id":184,"pnu":"4121010400100190000","addr":"경기도 광명시 소하동 19","dong":"소하동","jibun":"19","jimok":"대","area":448,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4425500,"p26":4718240,"chg":6.61,"flags":[],"excluded":false},{"id":185,"pnu":"4121010400100230000","addr":"경기도 광명시 소하동 23","dong":"소하동","jibun":"23","jimok":"전","area":2365.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1204000,"p26":1172000,"chg":-2.66,"flags":[],"excluded":false},{"id":186,"pnu":"4121010400100320000","addr":"경기도 광명시 소하동 32","dong":"소하동","jibun":"32","jimok":"대","area":303.7,"zone":"일반상업지역","zoneGroup":"상업","p25":4768200,"p26":4620560,"chg":-3.1,"flags":[],"excluded":false},{"id":187,"pnu":"4121010400100440000","addr":"경기도 광명시 소하동 44","dong":"소하동","jibun":"44","jimok":"공","area":103.2,"zone":"일반공업지역","zoneGroup":"공업","p25":5392900,"p26":5073820,"chg":-5.92,"flags":[],"excluded":false},{"id":188,"pnu":"4121010400100690000","addr":"경기도 광명시 소하동 69","dong":"소하동","jibun":"69","jimok":"대","area":351.8,"zone":"일반상업지역","zoneGroup":"상업","p25":4236800,"p26":4002710,"chg":-5.53,"flags":[],"excluded":false},{"id":189,"pnu":"4121010400101120000","addr":"경기도 광명시 소하동 112","dong":"소하동","jibun":"112","jimok":"학","area":522.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3223500,"p26":3155020,"chg":-2.12,"flags":[],"excluded":false},{"id":190,"pnu":"4121010400101140000","addr":"경기도 광명시 소하동 114","dong":"소하동","jibun":"114","jimok":"공","area":666.6,"zone":"일반공업지역","zoneGroup":"공업","p25":2926200,"p26":2894490,"chg":-1.08,"flags":[],"excluded":false},{"id":191,"pnu":"4121010400101230000","addr":"경기도 광명시 소하동 123","dong":"소하동","jibun":"123","jimok":"전","area":579.5,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1062900,"p26":1064320,"chg":0.13,"flags":[],"excluded":false},{"id":192,"pnu":"4121010400101290000","addr":"경기도 광명시 소하동 129","dong":"소하동","jibun":"129","jimok":"대","area":156.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3017100,"p26":3224030,"chg":6.86,"flags":[],"excluded":false},{"id":193,"pnu":"4121010400101360044","addr":"경기도 광명시 소하동 136-44","dong":"소하동","jibun":"136-44","jimok":"대","area":818.2,"zone":"준주거지역","zoneGroup":"주거","p25":3846600,"p26":3685990,"chg":-4.18,"flags":[],"excluded":false},{"id":194,"pnu":"4121010400101650049","addr":"경기도 광명시 소하동 165-49","dong":"소하동","jibun":"165-49","jimok":"대","area":856.5,"zone":"일반상업지역","zoneGroup":"상업","p25":6401900,"p26":6441300,"chg":0.62,"flags":[],"excluded":false},{"id":195,"pnu":"4121010400101670000","addr":"경기도 광명시 소하동 167","dong":"소하동","jibun":"167","jimok":"공","area":231.3,"zone":"준공업지역","zoneGroup":"공업","p25":4176900,"p26":4067900,"chg":-2.61,"flags":[],"excluded":false},{"id":196,"pnu":"4121010400101680000","addr":"경기도 광명시 소하동 168","dong":"소하동","jibun":"168","jimok":"대","area":551.3,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3230800,"p26":3160370,"chg":-2.18,"flags":[],"excluded":false},{"id":197,"pnu":"4121010400101700000","addr":"경기도 광명시 소하동 170","dong":"소하동","jibun":"170","jimok":"대","area":619.4,"zone":"준주거지역","zoneGroup":"주거","p25":5904600,"p26":6090820,"chg":3.15,"flags":[],"excluded":false},{"id":198,"pnu":"4121010400101730000","addr":"경기도 광명시 소하동 173","dong":"소하동","jibun":"173","jimok":"임","area":650.9,"zone":"보전녹지지역","zoneGroup":"녹지","p25":512600,"p26":544530,"chg":6.23,"flags":[],"excluded":false},{"id":199,"pnu":"412101040010179000","addr":"경기도 광명시 소하동 179-5","dong":"소하동","jibun":"179-5","jimok":"대","area":604.4,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3111800,"p26":3096950,"chg":-0.48,"flags":[],"excluded":false},{"id":200,"pnu":"4121010400101870000","addr":"경기도 광명시 소하동 187","dong":"소하동","jibun":"187","jimok":"도","area":305.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4143200,"p26":4117390,"chg":-0.62,"flags":[],"excluded":false},{"id":201,"pnu":"4121010400101960060","addr":"경기도 광면시 소하동 196-60","dong":"소하동","jibun":"196-60","jimok":"대","area":202.9,"zone":"준주거지역","zoneGroup":"주거","p25":3976800,"p26":3945110,"chg":-0.8,"flags":[],"excluded":false},{"id":202,"pnu":"4121010400102130000","addr":"경기도 광명시 소하동 213","dong":"소하동","jibun":"213","jimok":"잡","area":355.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1671500,"p26":1576230,"chg":-5.7,"flags":[],"excluded":false},{"id":203,"pnu":"4121010400102450000","addr":"경기도 광명시 소하동 245","dong":"소하동","jibun":"245","jimok":"학","area":158.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5174300,"p26":5362680,"chg":3.64,"flags":[],"excluded":false},{"id":204,"pnu":"4121010400102540000","addr":"경기도 광명시 소하동 254","dong":"소하동","jibun":"254","jimok":"대","area":460.5,"zone":"준주거지역","zoneGroup":"주거","p25":6137700,"p26":5928800,"chg":-3.4,"flags":[],"excluded":false},{"id":205,"pnu":"4121010400102630024","addr":"경기도 광명시 소하동 263-24","dong":"소하동","jibun":"263-24","jimok":"공","area":576.3,"zone":"준공업지역","zoneGroup":"공업","p25":3436600,"p26":3697220,"chg":7.58,"flags":[],"excluded":false},{"id":206,"pnu":"4121010400102710041","addr":"경기도 광명시 소하동 271-41","dong":"소하동","jibun":"271-41","jimok":"대","area":515.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6435300,"p26":6497310,"chg":0.96,"flags":[],"excluded":false},{"id":207,"pnu":"4121010400102770045","addr":"경기도 광명시 소하동 277-45","dong":"소하동","jibun":"277-45","jimok":"도","area":158,"zone":"준주거지역","zoneGroup":"주거","p25":3380100,"p26":3590090,"chg":6.21,"flags":[],"excluded":false},{"id":208,"pnu":"4121010400102780000","addr":"경기도 광명시 소하동 278","dong":"소하동","jibun":"278","jimok":"대","area":116.6,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4195600,"p26":4396390,"chg":4.79,"flags":[],"excluded":false},{"id":209,"pnu":"4121010400102820000","addr":"경기도 광명시 소하동 282","dong":"소하동","jibun":"282","jimok":"도","area":231.4,"zone":"준주거지역","zoneGroup":"주거","p25":2434700,"p26":2366150,"chg":-2.82,"flags":[],"excluded":false},{"id":210,"pnu":"4121010400102890000","addr":"경기도 광명시 소하동 289","dong":"소하동","jibun":"289","jimok":"답","area":3132.9,"zone":"자연녹지지역","zoneGroup":"녹지","p25":827800,"p26":874000,"chg":5.58,"flags":[],"excluded":false},{"id":211,"pnu":"4121010400102920000","addr":"경기도 광명시 소하동 292","dong":"소하동","jibun":"292","jimok":"대","area":263.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2881700,"p26":2847730,"chg":-1.18,"flags":[],"excluded":false},{"id":212,"pnu":"412101040010296005X","addr":"경기도 광명시 소하동 296-50","dong":"소하동","jibun":"296-50","jimok":"잡","area":776.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2010200,"p26":2011430,"chg":0.06,"flags":[],"excluded":false},{"id":213,"pnu":"4121010400103020025","addr":"경기도 광명시 소하동 302-25","dong":"소하동","jibun":"302-25","jimok":"대","area":587.2,"zone":"일반상업지역","zoneGroup":"상업","p25":4039000,"p26":4133910,"chg":2.35,"flags":[],"excluded":false},{"id":214,"pnu":"4121010400103050000","addr":"경기도 광명시 소하동 305","dong":"소하동","jibun":"305","jimok":"도","area":236.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4239000,"p26":4244870,"chg":0.14,"flags":[],"excluded":false},{"id":215,"pnu":"4121010400103060000","addr":"경기도 광명시 소하동 306","dong":"소하동","jibun":"306","jimok":"잡","area":855.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1703400,"p26":1637080,"chg":-3.89,"flags":[],"excluded":false},{"id":216,"pnu":"4121010400103100020","addr":"경기도 광명시 소하동 310-20","dong":"소하동","jibun":"310-20","jimok":"전","area":2578.1,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1704400,"p26":2420250,"chg":42,"flags":[],"excluded":false},{"id":217,"pnu":"4121010400103340009","addr":"경기도 광명시 소하동 334-9","dong":"소하동","jibun":"334-9","jimok":"전","area":1530.4,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1865400,"p26":1815400,"chg":-2.68,"flags":[],"excluded":false},{"id":218,"pnu":"4121010400103650000","addr":"경기도 광명시 소하동 365","dong":"소하동","jibun":"365","jimok":"대","area":438.3,"zone":"준주거지역","zoneGroup":"주거","p25":2870100,"p26":3051990,"chg":6.34,"flags":[],"excluded":false},{"id":219,"pnu":"4121010400103730000","addr":"경기도 광명시 소하동 373","dong":"소하동","jibun":"373","jimok":"답","area":2584.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1126700,"p26":1060270,"chg":-5.9,"flags":[],"excluded":false},{"id":220,"pnu":"4121010400104020006","addr":"경기도 광명시 소하동 402-6","dong":"소하동","jibun":"402-6","jimok":"도","area":714.3,"zone":"준주거지역","zoneGroup":"주거","p25":3557400,"p26":3741000,"chg":5.16,"flags":[],"excluded":false},{"id":221,"pnu":"4121010400104210000","addr":"경기도 광명시 소하동 421","dong":"소하동","jibun":"","jimok":"대","area":757.9,"zone":"일반상업지역","zoneGroup":"상업","p25":3217200,"p26":3387760,"chg":5.3,"flags":[],"excluded":false},{"id":222,"pnu":"4121010400104300000","addr":"경기도 광명시 소하동 430","dong":"소하동","jibun":"430","jimok":"대","area":71.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":5809000,"p26":6221040,"chg":7.09,"flags":[],"excluded":false},{"id":223,"pnu":"4121010400104720008","addr":"경기도 광명시 소하동 472-8","dong":"소하동","jibun":"472-8","jimok":"대","area":648,"zone":"일반상업지역","zoneGroup":"상업","p25":3202300,"p26":3348680,"chg":4.57,"flags":[],"excluded":false},{"id":224,"pnu":"4121010400104730044","addr":"경기도 광명시 소하동 473-44","dong":"소하동","jibun":"473-44","jimok":"학","area":480.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3831800,"p26":3870740,"chg":1.02,"flags":[],"excluded":false},{"id":225,"pnu":"4121010400105390000","addr":"경기도 광명시 소하동 539","dong":"소하동","jibun":"539","jimok":"대","area":527.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3532600,"p26":3647380,"chg":3.25,"flags":[],"excluded":false},{"id":226,"pnu":"4121010400105470000","addr":"경기도 광명시 소하동 547","dong":"소하동","jibun":"547","jimok":"대","area":423,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5741500,"p26":6071750,"chg":5.75,"flags":[],"excluded":false},{"id":227,"pnu":"4121010400105530034","addr":"경기도 광명시 소하동 553-34","dong":"소하동","jibun":"553-34","jimok":"대","area":744.3,"zone":"일반상업지역","zoneGroup":"상업","p25":5037800,"p26":5447760,"chg":8.14,"flags":[],"excluded":false},{"id":228,"pnu":"4121010400105770000","addr":"경기도 광명시 소하동 577","dong":"소하동","jibun":"577","jimok":"대","area":883.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4126000,"p26":4348580,"chg":5.39,"flags":[],"excluded":false},{"id":229,"pnu":"4121010400105860016","addr":"경기도 광명시 소하동 586-16","dong":"소하동","jibun":"586-16","jimok":"전","area":1814.8,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1790100,"p26":1759760,"chg":-1.69,"flags":[],"excluded":false},{"id":230,"pnu":"4121010400105910000","addr":"경기도 광명시 소하동 591","dong":"소하동","jibun":"591","jimok":"대","area":550.8,"zone":"일반상업지역","zoneGroup":"상업","p25":5437500,"p26":5870040,"chg":7.95,"flags":[],"excluded":false},{"id":231,"pnu":"4121010400106010000","addr":"경기도 광명시 소하동 601","dong":"소하동","jibun":"601","jimok":"임","area":3267.3,"zone":"보전녹지지역","zoneGroup":"녹지","p25":430700,"p26":461470,"chg":7.14,"flags":[],"excluded":false},{"id":232,"pnu":"4121010400106080000","addr":"경기도 광명시 소하동 608","dong":"소하동","jibun":"608","jimok":"대","area":123.7,"zone":"일반상업지역","zoneGroup":"상업","p25":4716200,"p26":4569690,"chg":-3.11,"flags":[],"excluded":false},{"id":233,"pnu":"4121010400106130000","addr":"경기도 광명시 소하동 613","dong":"소하동","jibun":"613","jimok":"대","area":787,"zone":"일반상업지역","zoneGroup":"상업","p25":3745900,"p26":4026880,"chg":7.5,"flags":[],"excluded":false},{"id":234,"pnu":"4121010400106180000","addr":"경기도 광명시 소하동 618","dong":"소하동","jibun":"618","jimok":"도","area":822.8,"zone":"준주거지역","zoneGroup":"주거","p25":2706500,"p26":2710000,"chg":0.13,"flags":[],"excluded":false},{"id":235,"pnu":"4121010400106190000","addr":"경기도 광명시 소하동 619","dong":"소하동","jibun":"619","jimok":"대","area":708.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4334400,"p26":4535230,"chg":4.63,"flags":[],"excluded":false},{"id":236,"pnu":"4121010400106200000","addr":"경기도 광명시 소하동 620","dong":"소하동","jibun":"620","jimok":"대","area":662.2,"zone":"일반상업지역","zoneGroup":"상업","p25":3181700,"p26":3375170,"chg":6.08,"flags":[],"excluded":false},{"id":237,"pnu":"4121010500100040000","addr":"경기도 광명시 일직동 4","dong":"일직동","jibun":"4","jimok":"대","area":480,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4456300,"p26":4356040,"chg":-2.25,"flags":[],"excluded":false},{"id":238,"pnu":"4121010500100230000","addr":"경기도 광명시 일직동 23","dong":"일직동","jibun":"23","jimok":"대","area":833.3,"zone":"일반상업지역","zoneGroup":"상업","p25":3662900,"p26":3543810,"chg":-3.25,"flags":[],"excluded":false},{"id":239,"pnu":"4121010500100310030","addr":"경기도 광명시 일직동 31-30","dong":"일직동","jibun":"31-30","jimok":"대","area":350.7,"zone":"준주거지역","zoneGroup":"주거","p25":6598100,"p26":6245640,"chg":-5.34,"flags":[],"excluded":false},{"id":240,"pnu":"4121010500100320000","addr":"경기도 광명시 일직동 32","dong":"일직동","jibun":"32","jimok":"대","area":239.4,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3149900,"p26":3077380,"chg":-2.3,"flags":[],"excluded":false},{"id":241,"pnu":"4121010500100400000","addr":"경기도 광명시 일직동 40","dong":"일직동","jibun":"40","jimok":"대","area":425.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5210100,"p26":5580770,"chg":7.11,"flags":[],"excluded":false},{"id":242,"pnu":"4121010500100530000","addr":"경기도 광명시 일직동 53","dong":"일직동","jibun":"53","jimok":"대","area":244.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4103300,"p26":4320110,"chg":5.28,"flags":[],"excluded":false},{"id":243,"pnu":"4121010500100620019","addr":"경기도 광명시 일직동 62-19","dong":"일직동","jibun":"62-19","jimok":"학","area":447.6,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":5545600,"p26":5375700,"chg":-3.06,"flags":[],"excluded":false},{"id":244,"pnu":"4121010500100670000","addr":"경기도 광명시 일직동 67","dong":"일직동","jibun":"67","jimok":"대","area":458.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6276900,"p26":6136000,"chg":-2.24,"flags":[],"excluded":false},{"id":245,"pnu":"4121010500100710000","addr":"경기도 광명시 일직동 71","dong":"일직동","jibun":"71","jimok":"답","area":997.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1107600,"p26":1187990,"chg":7.26,"flags":[],"excluded":false},{"id":246,"pnu":"4121010500100740000","addr":"경기도 광명시 일직동 74","dong":"일직동","jibun":"74","jimok":"전","area":344,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1082100,"p26":1056900,"chg":-2.33,"flags":[],"excluded":false},{"id":247,"pnu":"4121010500100750000","addr":"경기도 광명시 일직동 75","dong":"일직동","jibun":"75","jimok":"전","area":2893.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2288200,"p26":null,"chg":null,"flags":["missing26"],"excluded":true},{"id":248,"pnu":"4122010500100770000","addr":"경기도 광명시 일직동 77","dong":"일직동","jibun":"77","jimok":"대","area":445.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6595400,"p26":6298400,"chg":-4.5,"flags":[],"excluded":false},{"id":249,"pnu":"4121010500100790000","addr":"경기도 광명시 일직동 79","dong":"일직동","jibun":"79","jimok":"대","area":898.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6347000,"p26":6118460,"chg":-3.6,"flags":[],"excluded":false},{"id":250,"pnu":"4121010500100850053","addr":"경기도 광명시 일직동 85-53","dong":"일직동","jibun":"85-53","jimok":"전","area":883.5,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1757900,"p26":1682090,"chg":-4.31,"flags":[],"excluded":false},{"id":251,"pnu":"4121010500101050041","addr":"경기도 광명시 일직동 105-41","dong":"일직동","jibun":"105-41","jimok":"대","area":528.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":4926100,"p26":4639410,"chg":-5.82,"flags":[],"excluded":false},{"id":252,"pnu":"4121010500101060000","addr":"경기도 광명시 일직동 106","dong":"일직동","jibun":"106","jimok":"대","area":112.4,"zone":"일반상업지역","zoneGroup":"상업","p25":3358100,"p26":3425310,"chg":2,"flags":[],"excluded":false},{"id":253,"pnu":"4121010500101320000","addr":"경기도 광명시 일직동 132","dong":"일직동","jibun":"132","jimok":"대","area":418.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7631400,"p26":7447780,"chg":-2.41,"flags":[],"excluded":false},{"id":254,"pnu":"4121010500101860000","addr":"경기도 광명시 일직동 186","dong":"일직동","jibun":"186","jimok":"대","area":478.4,"zone":"일반상업지역","zoneGroup":"상업","p25":6322500,"p26":6833270,"chg":8.08,"flags":[],"excluded":false},{"id":255,"pnu":"4121010500102250008","addr":"경기도 광명시 일직동 225-8","dong":"일직동","jibun":"225-8","jimok":"잡","area":848.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2775800,"p26":3014100,"chg":8.58,"flags":[],"excluded":false},{"id":256,"pnu":"4121010500102260020","addr":"경기도 광명시 일직동 226-20","dong":"일직동","jibun":"226-20","jimok":"대","area":772.3,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":6185000,"p26":6211420,"chg":0.43,"flags":[],"excluded":false},{"id":257,"pnu":"4121010500102620000","addr":"경기도 광명시 일직동 262","dong":"일직동","jibun":"262","jimok":"대","area":160.6,"zone":"일반상업지역","zoneGroup":"상업","p25":6050000,"p26":6514160,"chg":7.67,"flags":[],"excluded":false},{"id":258,"pnu":"4121010500102660005","addr":"경기도 광명시 일직동 266-5","dong":"일직동","jibun":"266-5","jimok":"대","area":114.8,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":7567200,"p26":7937730,"chg":4.9,"flags":[],"excluded":false},{"id":259,"pnu":"4121010500102840038","addr":"경기도 광명시 일직동 284-38","dong":"일직동","jibun":"284-38","jimok":"대","area":421.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4850900,"p26":5182380,"chg":6.83,"flags":[],"excluded":false},{"id":260,"pnu":"4121010500102880056","addr":"경기도 광명시 일직동 288-56","dong":"일직동","jibun":"288-56","jimok":"대","area":395.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6015100,"p26":5657930,"chg":-5.94,"flags":[],"excluded":false},{"id":261,"pnu":"4121010500103140000","addr":"경기도 광명시 일직동 314","dong":"일직동","jibun":"314","jimok":"대","area":787.9,"zone":"준주거지역","zoneGroup":"주거","p25":4453600,"p26":4278670,"chg":-3.93,"flags":[],"excluded":false},{"id":262,"pnu":"4121010500103260000","addr":"경기도 광명시 일직동 326","dong":"일직동","jibun":"326","jimok":"공","area":391.6,"zone":"일반공업지역","zoneGroup":"공업","p25":4940600,"p26":5009490,"chg":1.39,"flags":[],"excluded":false},{"id":263,"pnu":"4121010500103350000","addr":"경기도 광명시 일직동 335","dong":"일직동","jibun":"335","jimok":"임","area":2928.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":840300,"p26":810560,"chg":-3.54,"flags":[],"excluded":false},{"id":264,"pnu":"4121010500103360030","addr":"경기도 광명시 일직동 336-30","dong":"일직동","jibun":"336-30","jimok":"전","area":1849.8,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1616700,"p26":1694160,"chg":4.79,"flags":[],"excluded":false},{"id":265,"pnu":"4121010500103360043","addr":"경기도 광명시 일직동 336-43","dong":"일직동","jibun":"336-43","jimok":"도","area":686.7,"zone":"준주거지역","zoneGroup":"주거","p25":4504700,"p26":4399470,"chg":-2.34,"flags":[],"excluded":false},{"id":266,"pnu":"4121010500103650018","addr":"경기도 광명시 일직동 365-18","dong":"일직동","jibun":"365-18","jimok":"임","area":2461.9,"zone":"보전녹지지역","zoneGroup":"녹지","p25":406600,"p26":385680,"chg":-5.15,"flags":[],"excluded":false},{"id":267,"pnu":"4121010500103750000","addr":"경기도 광명시 일직동 375","dong":"일직동","jibun":"375","jimok":"공","area":816.2,"zone":"일반공업지역","zoneGroup":"공업","p25":3777400,"p26":3690,"chg":-99.9,"flags":["scale"],"excluded":true},{"id":268,"pnu":"4121010500104030000","addr":"경기도 광명시 일직동 403","dong":"일직동","jibun":"403","jimok":"전","area":623.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1577200,"p26":1545060,"chg":-2.04,"flags":[],"excluded":false},{"id":269,"pnu":"4121010500104070000","addr":"경기도 광명시 일직동 407","dong":"일직동","jibun":"407","jimok":"전","area":1486,"zone":"자연녹지지역","zoneGroup":"녹지","p25":1840800,"p26":1778440,"chg":-3.39,"flags":[],"excluded":false},{"id":270,"pnu":"4121010500104080010","addr":"경기도 광명시 일직동 408-10","dong":"일직동","jibun":"408-10","jimok":"대","area":396.9,"zone":"일반상업지역","zoneGroup":"상업","p25":6826400,"p26":7110330,"chg":4.16,"flags":[],"excluded":false},{"id":271,"pnu":"4121010500104280044","addr":"경기도 광명시 일직동 428-44","dong":"일직동","jibun":"428-44","jimok":"대","area":661.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":6027700,"p26":6094150,"chg":1.1,"flags":[],"excluded":false},{"id":272,"pnu":"4121010500104440000","addr":"경기도 광명시 일직동 444","dong":"일직동","jibun":"444","jimok":"대","area":174.8,"zone":"준주거지역","zoneGroup":"주거","p25":4525900,"p26":4486110,"chg":-0.88,"flags":[],"excluded":false},{"id":273,"pnu":"4121010500104490000","addr":"경기도 광명시 일직동 449","dong":"일직동","jibun":"449","jimok":"답","area":2115.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":993600,"p26":997180,"chg":0.36,"flags":[],"excluded":false},{"id":274,"pnu":"4121010500104510000","addr":"경기도 광명시 일직동 451","dong":"일직동","jibun":"451","jimok":"잡","area":398.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3433400,"p26":3644820,"chg":6.16,"flags":[],"excluded":false},{"id":275,"pnu":"4121010500104600043","addr":"경기도 광명시 일직동 460-43","dong":"일직동","jibun":"460-43","jimok":"대","area":350.4,"zone":"일반상업지역","zoneGroup":"상업","p25":7372900,"p26":7811880,"chg":5.95,"flags":[],"excluded":false},{"id":276,"pnu":"4121010500104630027","addr":"경기도 광명시 일직동 463-27","dong":"일직동","jibun":"463-27","jimok":"전","area":3869.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":2131800,"p26":2288310,"chg":7.34,"flags":[],"excluded":false},{"id":277,"pnu":"4121010500104740000","addr":"경기도 광명시 일직동 474","dong":"일직동","jibun":"474","jimok":"대","area":227.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3863700,"p26":3862180,"chg":-0.04,"flags":[],"excluded":false},{"id":278,"pnu":"4121010500105060045","addr":"경기도 광명시 일직동 506-45","dong":"일직동","jibun":"506-45","jimok":"대","area":801.9,"zone":"일반상업지역","zoneGroup":"상업","p25":3133500,"p26":3094580,"chg":-1.24,"flags":[],"excluded":false},{"id":279,"pnu":"4121010500105120000","addr":"경기도 광명시 일직동 512","dong":"일직동","jibun":"512","jimok":"임","area":2762.4,"zone":"보전녹지지역","zoneGroup":"녹지","p25":503100,"p26":null,"chg":null,"flags":["missing26"],"excluded":true},{"id":280,"pnu":"4121010500105360024","addr":"경기도 광명시 일직동 536-24","dong":"일직동","jibun":"536-24","jimok":"전","area":1969.8,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1032000,"p26":1090610,"chg":5.68,"flags":[],"excluded":false},{"id":281,"pnu":"4121010500105560008","addr":"경기도 광명시 일직동 556-8","dong":"일직동","jibun":"556-8","jimok":"대","area":870.1,"zone":"일반상업지역","zoneGroup":"상업","p25":3532100,"p26":3781370,"chg":7.06,"flags":[],"excluded":false},{"id":282,"pnu":"4121010500105870000","addr":"경기도 광명시 일직동 587","dong":"일직동","jibun":"587","jimok":"답","area":3225.7,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1432100,"p26":1479850,"chg":3.33,"flags":[],"excluded":false},{"id":283,"pnu":"4121010500105900000","addr":"경기도 광명시 일직동 590","dong":"일직동","jibun":"590","jimok":"대","area":288.6,"zone":"준주거지역","zoneGroup":"주거","p25":4459400,"p26":4438110,"chg":-0.48,"flags":[],"excluded":false},{"id":284,"pnu":"4121010500105960017","addr":"경기도 광명시 일직동 596-17","dong":"일직동","jibun":"596-17","jimok":"학","area":275.8,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":3354300,"p26":3560830,"chg":6.16,"flags":[],"excluded":false},{"id":285,"pnu":"4121010500105980000","addr":"경기도 광명시 일직동 598","dong":"일직동","jibun":"598","jimok":"답","area":1178.9,"zone":"생산녹지지역","zoneGroup":"녹지","p25":1612300,"p26":1628800,"chg":1.02,"flags":[],"excluded":false},{"id":286,"pnu":"4121010500106060033","addr":"경기도 광명시 일직동 606-33","dong":"일직동","jibun":"606-33","jimok":"학","area":862.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":4164600,"p26":4113680,"chg":-1.22,"flags":[],"excluded":false},{"id":287,"pnu":"4121010600100160000","addr":"경기도 광명시 노온사동 16","dong":"노온사동","jibun":"16","jimok":"대","area":494.7,"zone":"일반상업지역","zoneGroup":"상업","p25":1230800,"p26":1315570,"chg":6.89,"flags":[],"excluded":false},{"id":288,"pnu":"4121010600100160041","addr":"경기도 광명시 노온사동 16-41","dong":"노온사동","jibun":"16-41","jimok":"대","area":721.4,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1759200,"p26":1724620,"chg":-1.97,"flags":[],"excluded":false},{"id":289,"pnu":"4121010600100500030","addr":"경기도 광명시 노온사동 50-30","dong":"노온사동","jibun":"50-30","jimok":"전","area":3533.4,"zone":"생산녹지지역","zoneGroup":"녹지","p25":559700,"p26":555290,"chg":-0.79,"flags":[],"excluded":false},{"id":290,"pnu":"4121010600100640000","addr":"경기도 광명시 노온사동 64","dong":"노온사동","jibun":"64","jimok":"대","area":395.1,"zone":"일반상업지역","zoneGroup":"상업","p25":1589700,"p26":1708930,"chg":7.5,"flags":[],"excluded":false},{"id":291,"pnu":"4121010600100780000","addr":"경기도 광명시 노온사동 78","dong":"노온사동","jibun":"78","jimok":"대","area":883.6,"zone":"일반상업지역","zoneGroup":"상업","p25":1010000,"p26":1015,"chg":-99.9,"flags":["scale"],"excluded":true},{"id":292,"pnu":"4121010600100780041","addr":"경기도 광명시 노온사동 78-41","dong":"노온사동","jibun":"78-41","jimok":"공","area":235.1,"zone":"준공업지역","zoneGroup":"공업","p25":1425300,"p26":1348430,"chg":-5.39,"flags":[],"excluded":false},{"id":293,"pnu":"4121010600100930000","addr":"경기도 광명시 노온사동 93","dong":"노온사동","jibun":"93","jimok":"도","area":218.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1363600,"p26":1308850,"chg":-4.02,"flags":[],"excluded":false},{"id":294,"pnu":"4121010600101020000","addr":"경기도 광명시 노온사동 102","dong":"노온사동","jibun":"102","jimok":"학","area":432.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1033400,"p26":1061360,"chg":2.71,"flags":[],"excluded":false},{"id":295,"pnu":"4121010600101020001","addr":"경기도 광명시 노온사등 102-1","dong":"노온사동","jibun":"102-1","jimok":"잡","area":175.7,"zone":"자연녹지지역","zoneGroup":"녹지","p25":380900,"p26":411170,"chg":7.95,"flags":[],"excluded":false},{"id":296,"pnu":"4121010600101160049","addr":"경기도 광명시 노온사동 116-49","dong":"노온사동","jibun":"116-49","jimok":"대","area":567.2,"zone":"일반상업지역","zoneGroup":"상업","p25":1421000,"p26":1391370,"chg":-2.09,"flags":[],"excluded":false},{"id":297,"pnu":"4121010600101350005","addr":"경기도 광명시 노온사동 135-5","dong":"노온사동","jibun":"135-5","jimok":"전","area":380.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":353700,"p26":380380,"chg":7.54,"flags":[],"excluded":false},{"id":298,"pnu":"4121010600101480000","addr":"경기도 광명시 노온사동 148","dong":"노온사동","jibun":"148","jimok":"답","area":1253.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":282700,"p26":304990,"chg":7.88,"flags":[],"excluded":false},{"id":299,"pnu":"4121010600101800060","addr":"경기도 광명시 노온사동 180-60","dong":"노온사동","jibun":"180-60","jimok":"대","area":619.9,"zone":"일반상업지역","zoneGroup":"상업","p25":1358000,"p26":1298710,"chg":-4.37,"flags":[],"excluded":false},{"id":300,"pnu":"4121010600102030000","addr":"경기도 광명시 노온사동 203","dong":"노온사동","jibun":"203","jimok":"대","area":316.8,"zone":"준주거지역","zoneGroup":"주거","p25":1680000,"p26":1582750,"chg":-5.79,"flags":[],"excluded":false},{"id":301,"pnu":"4121010600102100017","addr":"경기도 광명시 노온사동 210-17","dong":"노온사동","jibun":"210-17","jimok":"대","area":167.5,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1857600,"p26":1884190,"chg":1.43,"flags":[],"excluded":false},{"id":302,"pnu":"4121010600102260000","addr":"경기도 광명시 노온사동 226","dong":"노온사동","jibun":"226","jimok":"공","area":118.9,"zone":"일반공업지역","zoneGroup":"공업","p25":812500,"p26":869530,"chg":7.02,"flags":[],"excluded":false},{"id":303,"pnu":"4121010600102580000","addr":"경기도 광명시 노온사동 258","dong":"노온사동","jibun":"258","jimok":"대","area":617.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1521800,"p26":1567830,"chg":3.02,"flags":[],"excluded":false},{"id":304,"pnu":"4121010600102730000","addr":"경기도 광명시 노온사동 273","dong":"노온사동","jibun":"273","jimok":"대","area":205.2,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1145600,"p26":1194120,"chg":4.24,"flags":[],"excluded":false},{"id":305,"pnu":"4121010600102830000","addr":"경기도 광명시 노온사동 283","dong":"노온사동","jibun":"283","jimok":"대","area":812.1,"zone":"일반상업지역","zoneGroup":"상업","p25":1080100,"p26":1025240,"chg":-5.08,"flags":[],"excluded":false},{"id":306,"pnu":"4121010600102870033","addr":"경기도 광명시 노온사동 287-33","dong":"노온사동","jibun":"287-33","jimok":"전","area":1980.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":246000,"p26":245090,"chg":-0.37,"flags":[],"excluded":false},{"id":307,"pnu":"4121010600102930023","addr":"경기도 광명시 노온사동 293-23","dong":"노온사동","jibun":"293-23","jimok":"전","area":836.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":313500,"p26":326550,"chg":4.16,"flags":[],"excluded":false},{"id":308,"pnu":"4121010600102940060","addr":"경기도 광명시 노온사동 294-60","dong":"노온사동","jibun":"294-60","jimok":"도","area":118.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1128000,"p26":1082410,"chg":-4.04,"flags":[],"excluded":false},{"id":309,"pnu":"4121010600103230046","addr":"경기도 광명시 노온사동 323-46","dong":"노온사동","jibun":"323-46","jimok":"도","area":521.8,"zone":"준주거지역","zoneGroup":"주거","p25":1363700,"p26":1338950,"chg":-1.81,"flags":[],"excluded":false},{"id":310,"pnu":"4121010600103280033","addr":"경기도 광명시 노온사동 328-33","dong":"노온사동","jibun":"328-33","jimok":"대","area":861.3,"zone":"일반상업지역","zoneGroup":"상업","p25":1605400,"p26":1520860,"chg":-5.27,"flags":[],"excluded":false},{"id":311,"pnu":"4121010600103330000","addr":"경기도 광명시 노온사동 333","dong":"노온사동","jibun":"333","jimok":"전","area":1664.6,"zone":"자연녹지지역","zoneGroup":"녹지","p25":296300,"p26":313960,"chg":5.96,"flags":[],"excluded":false},{"id":312,"pnu":"4121010600103380000","addr":"경기도 광명시 노온사동 338","dong":"노온사동","jibun":"338","jimok":"대","area":877.7,"zone":"일반상업지역","zoneGroup":"상업","p25":1337300,"p26":1456480,"chg":8.91,"flags":[],"excluded":false},{"id":313,"pnu":"4121010600103710000","addr":"경기도 광명시 노온사동 371","dong":"노온사동","jibun":"371","jimok":"임","area":2950.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":116400,"p26":110530,"chg":-5.04,"flags":[],"excluded":false},{"id":314,"pnu":"4121010600103950012","addr":"경기도 광명시 노온사동 395-12","dong":"노온사동","jibun":"395-12","jimok":"대","area":400.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1541300,"p26":1666940,"chg":8.15,"flags":[],"excluded":false},{"id":315,"pnu":"4121010600104040000","addr":"경기도 광명시 노온사동 404","dong":"노온사동","jibun":"404","jimok":"답","area":1138.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":390200,"p26":412520,"chg":5.72,"flags":[],"excluded":false},{"id":316,"pnu":"4121010600104130048","addr":"경기도 광명시 노온사동 413-48","dong":"노온사동","jibun":"413-48","jimok":"임","area":3290.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":190400,"p26":204210,"chg":7.25,"flags":[],"excluded":false},{"id":317,"pnu":"4121010600104230000","addr":"경기도 광명시 노온사동 423","dong":"노온사동","jibun":"423","jimok":"대","area":744.2,"zone":"준주거지역","zoneGroup":"주거","p25":1241900,"p26":1280310,"chg":3.09,"flags":[],"excluded":false},{"id":318,"pnu":"4121010600104580000","addr":"경기도 광명시 노온사동 458","dong":"노온사동","jibun":"458","jimok":"도","area":402.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1239700,"p26":1169420,"chg":-5.67,"flags":[],"excluded":false},{"id":319,"pnu":"4121010600104600000","addr":"경기도 광명시 노온사동 460","dong":"노온사동","jibun":"460","jimok":"답","area":1309.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":331200,"p26":325470,"chg":-1.73,"flags":[],"excluded":false},{"id":320,"pnu":"4121010600104690000","addr":"경기도 광명시 노온사동 469","dong":"노온사동","jibun":"469","jimok":"학","area":830.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":944500,"p26":1015430,"chg":7.51,"flags":[],"excluded":false},{"id":321,"pnu":"4121010600104900059","addr":"경기도 광명시 노온사동 490-59","dong":"노온사동","jibun":"490-59","jimok":"도","area":482,"zone":"준주거지역","zoneGroup":"주거","p25":1193700,"p26":1149460,"chg":-3.71,"flags":[],"excluded":false},{"id":322,"pnu":"4121010600105350000","addr":"경기도 광명시 노온사동 535","dong":"노온사동","jibun":"535","jimok":"임","area":453,"zone":"보전녹지지역","zoneGroup":"녹지","p25":181000,"p26":171260,"chg":-5.38,"flags":[],"excluded":false},{"id":323,"pnu":"4121010600105430000","addr":"경기도 광명시 노온사동 543","dong":"노온사동","jibun":"543","jimok":"전","area":819.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":255300,"p26":268280,"chg":5.08,"flags":[],"excluded":false},{"id":324,"pnu":"4121010600105510000","addr":"경기도 광명시 노온사동 551","dong":"노온사동","jibun":"551","jimok":"대","area":849.6,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1204800,"p26":1231810,"chg":2.24,"flags":[],"excluded":false},{"id":325,"pnu":"4121010600105750001","addr":"경기도 광명시 노온사동 575-1","dong":"노온사동","jibun":"575-1","jimok":"대","area":95.9,"zone":"준주거지역","zoneGroup":"주거","p25":1914200,"p26":1998210,"chg":4.39,"flags":[],"excluded":false},{"id":326,"pnu":"4121010600105930042","addr":"경기도 광명시 노온사동 593-42","dong":"노온사동","jibun":"593-42","jimok":"대","area":824.7,"zone":"일반상업지역","zoneGroup":"상업","p25":787000,"p26":755080,"chg":-4.06,"flags":[],"excluded":false},{"id":327,"pnu":"4121010700100080035","addr":"경기도 광명시 가학동 8-35","dong":"가학동","jibun":"8-35","jimok":"잡","area":508.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":865000,"p26":929450,"chg":7.45,"flags":[],"excluded":false},{"id":328,"pnu":"4121010700100780000","addr":"경기도 광명시 가학동 78","dong":"가학동","jibun":"78","jimok":"잡","area":479.3,"zone":"자연녹지지역","zoneGroup":"녹지","p25":525300,"p26":497640,"chg":-5.27,"flags":[],"excluded":false},{"id":329,"pnu":"4121010700100820025","addr":"경기도 광명시 가학동 82-25","dong":"가학동","jibun":"82-25","jimok":"대","area":617.9,"zone":"준주거지역","zoneGroup":"주거","p25":1784700,"p26":1707680,"chg":-4.32,"flags":[],"excluded":false},{"id":330,"pnu":"4121010700100950000","addr":"경기도 광명시 가학동 95","dong":"가학동","jibun":"95","jimok":"대","area":895.2,"zone":"일반상업지역","zoneGroup":"상업","p25":2125800,"p26":2174640,"chg":2.3,"flags":[],"excluded":false},{"id":331,"pnu":"4121010700101000003","addr":"경기도 광명시 가학동 100-3","dong":"가학동","jibun":"100-3","jimok":"대","area":282.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1846100,"p26":1915160,"chg":3.74,"flags":[],"excluded":false},{"id":332,"pnu":"4121010700101100039","addr":"경기도 광명시 가학동 110-39","dong":"가학동","jibun":"110-39","jimok":"도","area":696.7,"zone":"준주거지역","zoneGroup":"주거","p25":1019300,"p26":1098490,"chg":7.77,"flags":[],"excluded":false},{"id":333,"pnu":"4121010700101310000","addr":"경기도 광명시 가학동 131","dong":"가학동","jibun":"131","jimok":"대","area":737,"zone":"준주거지역","zoneGroup":"주거","p25":1144100,"p26":1159790,"chg":1.37,"flags":[],"excluded":false},{"id":334,"pnu":"4121010700101400000","addr":"경기도 광명시 가학동 140","dong":"가학동","jibun":"140","jimok":"도","area":733.3,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":773900,"p26":738470,"chg":-4.58,"flags":[],"excluded":false},{"id":335,"pnu":"4121010700101420000","addr":"경기도 광명시 가학동 142","dong":"가학동","jibun":"142","jimok":"공","area":393.1,"zone":"준공업지역","zoneGroup":"공업","p25":2052700,"p26":2114130,"chg":2.99,"flags":[],"excluded":false},{"id":336,"pnu":"4121010700101450000","addr":"경기도 광명시 가학동 145","dong":"가학동","jibun":"145","jimok":"대","area":278.1,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":2373000,"p26":2328020,"chg":-1.9,"flags":[],"excluded":false},{"id":337,"pnu":"4121010700101490053","addr":"경기도 광명시 가학동 149-53","dong":"가학동","jibun":"","jimok":"대","area":636.9,"zone":"준주거지역","zoneGroup":"주거","p25":2320200,"p26":2243370,"chg":-3.31,"flags":[],"excluded":false},{"id":338,"pnu":"4121010700101630021","addr":"경기도 광명시 가학동 163-21","dong":"가학동","jibun":"163-21","jimok":"전","area":395.9,"zone":"생산녹지지역","zoneGroup":"녹지","p25":608600,"p26":643120,"chg":5.67,"flags":[],"excluded":false},{"id":339,"pnu":"4121010700101740000","addr":"경기도 광명시 가학동 174","dong":"가학동","jibun":"174","jimok":"대","area":677.4,"zone":"일반상업지역","zoneGroup":"상업","p25":2008300,"p26":2152500,"chg":7.18,"flags":[],"excluded":false},{"id":340,"pnu":"4121010700101960018","addr":"경기도 광명시 가학동 196-18","dong":"가학동","jibun":"196-18","jimok":"전","area":3329.9,"zone":"생산녹지지역","zoneGroup":"녹지","p25":589700,"p26":604050,"chg":2.43,"flags":[],"excluded":false},{"id":341,"pnu":"4121010700102090000","addr":"경기도 광명시 가학동 209","dong":"가학동","jibun":"209","jimok":"공","area":255.9,"zone":"준공업지역","zoneGroup":"공업","p25":1320600,"p26":1342260,"chg":1.64,"flags":[],"excluded":false},{"id":342,"pnu":"4121010700102200000","addr":"경기도 광명시 가학동 220","dong":"가학동","jibun":"220","jimok":"대","area":897.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1929000,"p26":2043670,"chg":5.94,"flags":[],"excluded":false},{"id":343,"pnu":"4121010700102360000","addr":"경기도 광명시 가학동 236","dong":"가학동","jibun":"236","jimok":"전","area":3172.2,"zone":"자연녹지지역","zoneGroup":"녹지","p25":529400,"p26":555440,"chg":4.92,"flags":[],"excluded":false},{"id":344,"pnu":"4121010700102420022","addr":"경기도 광명시 가학동 242-22","dong":"가학동","jibun":"242-22","jimok":"대","area":897.8,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1803700,"p26":1963450,"chg":8.86,"flags":[],"excluded":false},{"id":345,"pnu":"4121010700102690000","addr":"경기도 광명시 가학동 269","dong":"가학동","jibun":"269","jimok":"학","area":170.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1858400,"p26":1878320,"chg":1.07,"flags":[],"excluded":false},{"id":346,"pnu":"4121010700102850000","addr":"경기도 광명시 가학동 285","dong":"가학동","jibun":"285","jimok":"대","area":433.8,"zone":"준주거지역","zoneGroup":"주거","p25":1331100,"p26":1415080,"chg":6.31,"flags":[],"excluded":false},{"id":347,"pnu":"4121010700102940000","addr":"경기도 광명시 가학동 294","dong":"가학동","jibun":"294","jimok":"대","area":659.8,"zone":"일반상업지역","zoneGroup":"상업","p25":2142100,"p26":2243700,"chg":4.74,"flags":[],"excluded":false},{"id":348,"pnu":"4121010700103070000","addr":"경기도 광명시 가학동 307","dong":"가학동","jibun":"307","jimok":"답","area":2468,"zone":"생산녹지지역","zoneGroup":"녹지","p25":590000,"p26":599520,"chg":1.61,"flags":[],"excluded":false},{"id":349,"pnu":"4121010700103230000","addr":"경기도 광명시 가학동 323","dong":"가학동","jibun":"323","jimok":"전","area":1597.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":313200,"p26":323300,"chg":3.22,"flags":[],"excluded":false},{"id":350,"pnu":"4121010700103320000","addr":"경기도 광명시 가학동 332","dong":"가학동","jibun":"332","jimok":"도","area":404.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1075500,"p26":1108220,"chg":3.04,"flags":[],"excluded":false},{"id":351,"pnu":"4121010700103900020","addr":"경기도 광명시 가학동 390-20","dong":"가학동","jibun":"390-20","jimok":"전","area":2082.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":375400,"p26":390270,"chg":3.96,"flags":[],"excluded":false},{"id":352,"pnu":"4121010700104050000","addr":"경기도 광명시 가학동 405","dong":"가학동","jibun":"405","jimok":"대","area":795.2,"zone":"일반상업지역","zoneGroup":"상업","p25":2172100,"p26":2233660,"chg":2.83,"flags":[],"excluded":false},{"id":353,"pnu":"4121010700104070057","addr":"경기도 광명시 가학동 407-57","dong":"가학동","jibun":"407-57","jimok":"대","area":394.6,"zone":"일반상업지역","zoneGroup":"상업","p25":1281000,"p26":1225350,"chg":-4.34,"flags":[],"excluded":false},{"id":354,"pnu":"4121010700104240000","addr":"경기도 광명시 가학동 424","dong":"가학동","jibun":"424","jimok":"대","area":573.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2348200,"p26":2526880,"chg":7.61,"flags":[],"excluded":false},{"id":355,"pnu":"4121010700104770000","addr":"경기도 광명시 가학동 477","dong":"가학동","jibun":"477","jimok":"도","area":662.5,"zone":"준주거지역","zoneGroup":"주거","p25":1230900,"p26":1162380,"chg":-5.57,"flags":[],"excluded":false},{"id":356,"pnu":"4121010700104960058","addr":"경기도 광명시 가학동 496-58","dong":"가학동","jibun":"496-58","jimok":"대","area":886.1,"zone":"준주거지역","zoneGroup":"주거","p25":1445600,"p26":1451430,"chg":0.4,"flags":[],"excluded":false},{"id":357,"pnu":"4121010700105000027","addr":"경기도 광명시 가학동 500-27","dong":"가학동","jibun":"500-27","jimok":"도","area":533,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1683100,"p26":1805150,"chg":7.25,"flags":[],"excluded":false},{"id":358,"pnu":"4121010700105100000","addr":"경기도 광명시 가학동 510","dong":"가학동","jibun":"510","jimok":"대","area":865.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1102700,"p26":1186510,"chg":7.6,"flags":[],"excluded":false},{"id":359,"pnu":"4121010700105240000","addr":"경기도 광명시 가학동 524","dong":"가학동","jibun":"524","jimok":"전","area":335.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":343600,"p26":367530,"chg":6.96,"flags":[],"excluded":false},{"id":360,"pnu":"4121010700105430000","addr":"경기도 광명시 가학동 543","dong":"가학동","jibun":"543","jimok":"대","area":813.6,"zone":"준주거지역","zoneGroup":"주거","p25":1593700,"p26":1544030,"chg":-3.12,"flags":[],"excluded":false},{"id":361,"pnu":"4121010700105590000","addr":"경기도 광명시 가학동 559","dong":"가학동","jibun":"559","jimok":"대","area":629.7,"zone":"준주거지역","zoneGroup":"주거","p25":1825600,"p26":1913630,"chg":4.82,"flags":[],"excluded":false},{"id":362,"pnu":"4121010700105600000","addr":"경기도 광명시 가학동 560","dong":"가학동","jibun":"560","jimok":"대","area":796.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1555800,"p26":1513610,"chg":-2.71,"flags":[],"excluded":false},{"id":363,"pnu":"4121010700105660029","addr":"경기도 광명시 가학동 566-29","dong":"가학동","jibun":"566-29","jimok":"대","area":172.8,"zone":"일반상업지역","zoneGroup":"상업","p25":2124500,"p26":2260310,"chg":6.39,"flags":[],"excluded":false},{"id":364,"pnu":"4121010700105800025","addr":"경기도 광명시 가학동 580-25","dong":"가학동","jibun":"580-25","jimok":"대","area":321.7,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1465100,"p26":1377990,"chg":-5.95,"flags":[],"excluded":false},{"id":365,"pnu":"4121010700105870012","addr":"경기도 광명시 가학동 587-12","dong":"가학동","jibun":"587-12","jimok":"대","area":288.5,"zone":"준주거지역","zoneGroup":"주거","p25":1213900,"p26":1275150,"chg":5.05,"flags":[],"excluded":false},{"id":366,"pnu":"4121010700106030032","addr":"경기도 광명시 가학동 603-32","dong":"가학동","jibun":"603-32","jimok":"대","area":313.5,"zone":"준주거지역","zoneGroup":"주거","p25":1187500,"p26":1276050,"chg":7.46,"flags":[],"excluded":false},{"id":367,"pnu":"4121010800100030000","addr":"경기도 광명시 옥길동 3","dong":"옥길동","jibun":"3","jimok":"대","area":520.5,"zone":"준주거지역","zoneGroup":"주거","p25":1693100,"p26":1829350,"chg":8.05,"flags":[],"excluded":false},{"id":368,"pnu":"4121010800100120000","addr":"경기도 광명시 옥길동 12","dong":"옥길동","jibun":"12","jimok":"대","area":165.5,"zone":"준주거지역","zoneGroup":"주거","p25":3105900,"p26":3240840,"chg":4.34,"flags":[],"excluded":false},{"id":369,"pnu":"4121010800100250000","addr":"경기도 광명시 옥길동 25","dong":"옥길동","jibun":"25","jimok":"대","area":599.7,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1345800,"p26":1446700,"chg":7.5,"flags":[],"excluded":false},{"id":370,"pnu":"4121010800100440037","addr":"경기도 광명시 옥길동 44-37","dong":"옥길동","jibun":"44-37","jimok":"대","area":429.9,"zone":"일반상업지역","zoneGroup":"상업","p25":1834300,"p26":1955050,"chg":6.58,"flags":[],"excluded":false},{"id":371,"pnu":"4121010800100530000","addr":"경기도 광명시 옥길동 53","dong":"옥길동","jibun":"53","jimok":"대","area":596.2,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":3122300,"p26":3229920,"chg":3.45,"flags":[],"excluded":false},{"id":372,"pnu":"4121010800100870031","addr":"경기도 광명시 옥길동 87-31","dong":"옥길동","jibun":"87-31","jimok":"답","area":1023.1,"zone":"자연녹지지역","zoneGroup":"녹지","p25":689300,"p26":724150,"chg":5.06,"flags":[],"excluded":false},{"id":373,"pnu":"4121010800101010000","addr":"경기도 광명시 옥길동 101","dong":"옥길동","jibun":"101","jimok":"대","area":411.9,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2503800,"p26":2689700,"chg":7.42,"flags":[],"excluded":false},{"id":374,"pnu":"4121010800101270000","addr":"경기도 광명시 옥길동 127","dong":"옥길동","jibun":"127","jimok":"대","area":186.1,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2185600,"p26":2276730,"chg":4.17,"flags":[],"excluded":false},{"id":375,"pnu":"4121010800101530000","addr":"경기도 광명시 옥길동 153","dong":"옥길동","jibun":"153","jimok":"도","area":661.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1956300,"p26":1945730,"chg":-0.54,"flags":[],"excluded":false},{"id":376,"pnu":"4121010800101670024","addr":"경기도 광명시 옥길동 167-24","dong":"옥길동","jibun":"167-24","jimok":"도","area":688,"zone":"준주거지역","zoneGroup":"주거","p25":1416800,"p26":1358920,"chg":-4.09,"flags":[],"excluded":false},{"id":377,"pnu":"4121010800101800000","addr":"경기도 광명시 옥길동 180","dong":"옥길동","jibun":"180","jimok":"전","area":3608.3,"zone":"생산녹지지역","zoneGroup":"녹지","p25":433600,"p26":459800,"chg":6.04,"flags":[],"excluded":false},{"id":378,"pnu":"4121010800101920000","addr":"경기도 광명시 옥길동 192","dong":"옥길동","jibun":"192","jimok":"대","area":194.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2490800,"p26":2413640,"chg":-3.1,"flags":[],"excluded":false},{"id":379,"pnu":"4121010800101980014","addr":"경기도 광명시 옥길동 198-14","dong":"옥길동","jibun":"198-14","jimok":"","area":109.5,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1199700,"p26":1299950,"chg":8.36,"flags":["nojimok"],"excluded":false},{"id":380,"pnu":"4121010800101990026","addr":"경기도 광명시 옥길동 199-26","dong":"옥길동","jibun":"199-26","jimok":"대","area":628,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1334600,"p26":1269640,"chg":-4.87,"flags":[],"excluded":false},{"id":381,"pnu":"4121010800102090000","addr":"경기도 광명시 옥길동 209","dong":"옥길동","jibun":"209","jimok":"전","area":1059.5,"zone":"생산녹지지역","zoneGroup":"녹지","p25":856000,"p26":547840,"chg":-36,"flags":[],"excluded":false},{"id":382,"pnu":"4121010800102160000","addr":"경기도 광명시 옥길동 216","dong":"옥길동","jibun":"216","jimok":"전","area":2710.3,"zone":"생산녹지지역","zoneGroup":"녹지","p25":578200,"p26":561060,"chg":-2.96,"flags":[],"excluded":false},{"id":383,"pnu":"4121010800102200035","addr":"경기도 광명시 옥길동 220-35","dong":"옥길동","jibun":"220-35","jimok":"대","area":96.3,"zone":"일반상업지역","zoneGroup":"상업","p25":1753000,"p26":1866180,"chg":6.46,"flags":[],"excluded":false},{"id":384,"pnu":"4121010800102450006","addr":"경기도 광명시 옥길동 245-6","dong":"옥길동","jibun":"245-6","jimok":"답","area":663.4,"zone":"자연녹지지역","zoneGroup":"녹지","p25":708400,"p26":745220,"chg":5.2,"flags":[],"excluded":false},{"id":385,"pnu":"4121010800102730046","addr":"경기도 광명시 옥길동 273-46","dong":"옥길동","jibun":"273-46","jimok":"답","area":0,"zone":"자연녹지지역","zoneGroup":"녹지","p25":407300,"p26":412870,"chg":1.37,"flags":["area0"],"excluded":false},{"id":386,"pnu":"4121010800102970000","addr":"경기도 광명시 옥길동 297","dong":"옥길동","jibun":"297","jimok":"대","area":449.9,"zone":"제3종일반주거지역","zoneGroup":"주거","p25":1755200,"p26":1715000,"chg":-2.29,"flags":[],"excluded":false},{"id":387,"pnu":"4121010800103450035","addr":"경기도 광명시 옥길동 345-35","dong":"옥길동","jibun":"345-35","jimok":"대","area":116.8,"zone":"일반상업지역","zoneGroup":"상업","p25":2970200,"p26":3165090,"chg":6.56,"flags":[],"excluded":false},{"id":388,"pnu":"4121010800103490000","addr":"경기도 광명시 옥길동 349","dong":"옥길동","jibun":"349","jimok":"대","area":491.6,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":2295400,"p26":2484200,"chg":8.23,"flags":[],"excluded":false},{"id":389,"pnu":"4121010800103880000","addr":"경기도 광명시 옥길동 388","dong":"옥길동","jibun":"388","jimok":"대","area":763.1,"zone":"일반상업지역","zoneGroup":"상업","p25":1752600,"p26":1838570,"chg":4.91,"flags":[],"excluded":false},{"id":390,"pnu":"4121010800104110002","addr":"경기도 광명시 옥길동 411-2","dong":"옥길동","jibun":"411-2","jimok":"대","area":728.1,"zone":"일반상업지역","zoneGroup":"상업","p25":2212200,"p26":2104790,"chg":-4.86,"flags":[],"excluded":false},{"id":391,"pnu":"4121010800104120002","addr":"경기도 광명시 옥길동 412-2","dong":"옥길동","jibun":"412-2","jimok":"대","area":256.6,"zone":"준주거지역","zoneGroup":"주거","p25":2474800,"p26":2429530,"chg":-1.83,"flags":[],"excluded":false},{"id":392,"pnu":"4121010800104160000","addr":"경기도 광명시 옥길동 416","dong":"옥길동","jibun":"416","jimok":"대","area":861,"zone":"준주거지역","zoneGroup":"주거","p25":2815800,"p26":2732580,"chg":-2.96,"flags":[],"excluded":false},{"id":393,"pnu":"4121010800104330000","addr":"경기도 광명시 옥길동 433","dong":"옥길동","jibun":"433","jimok":"도","area":204.5,"zone":"준주거지역","zoneGroup":"주거","p25":1471300,"p26":1493900,"chg":1.54,"flags":[],"excluded":false},{"id":394,"pnu":"4121010800104840055","addr":"경기도 광명시 옥길동 484-55","dong":"옥길동","jibun":"484-55","jimok":"답","area":1487.8,"zone":"자연녹지지역","zoneGroup":"녹지","p25":649400,"p26":680750,"chg":4.83,"flags":[],"excluded":false},{"id":395,"pnu":"4121010800105020000","addr":"경기도 광명시 옥길동 502","dong":"옥길동","jibun":"502","jimok":"대","area":596.1,"zone":"준주거지역","zoneGroup":"주거","p25":2335700,"p26":2399430,"chg":2.73,"flags":[],"excluded":false},{"id":396,"pnu":"4121010800105330045","addr":"경기도 광명시 옥길동 533-45","dong":"옥길동","jibun":"533-45","jimok":"전","area":3257.6,"zone":"생산녹지지역","zoneGroup":"녹지","p25":816400,"p26":823330,"chg":0.85,"flags":[],"excluded":false},{"id":397,"pnu":"4121010800105420000","addr":"경기도 광명시 옥길동 542","dong":"옥길동","jibun":"542","jimok":"전","area":2370.3,"zone":"생산녹지지역","zoneGroup":"녹지","p25":415100,"p26":451020,"chg":8.65,"flags":[],"excluded":false},{"id":398,"pnu":"4121010400102630024","addr":"경기도 광명시 소하동 263-24","dong":"소하동","jibun":"263-24","jimok":"공","area":576.3,"zone":"준공업지역","zoneGroup":"공업","p25":3436600,"p26":3697220,"chg":7.58,"flags":["dup"],"excluded":true},{"id":399,"pnu":"4121010800105500000","addr":"경기도 광명시 옥길동 550","dong":"옥길동","jibun":"550","jimok":"전","area":2538,"zone":"생산녹지지역","zoneGroup":"녹지","p25":418300,"p26":404150,"chg":-3.38,"flags":[],"excluded":false},{"id":400,"pnu":"4121010800105680043","addr":"경기도 광명시 옥길동 568-43","dong":"옥길동","jibun":"568-43","jimok":"답","area":1491.7,"zone":"생산녹지지역","zoneGroup":"녹지","p25":469500,"p26":487620,"chg":3.86,"flags":[],"excluded":false},{"id":401,"pnu":"4121010800105730000","addr":"경기도 광명시 옥길동 573","dong":"옥길동","jibun":"573","jimok":"대","area":662,"zone":"제2종일반주거지역","zoneGroup":"주거","p25":1557200,"p26":1506550,"chg":-3.25,"flags":[],"excluded":false},{"id":402,"pnu":"4121010800106050000","addr":"경기도 광명시 옥길동 605","dong":"옥길동","jibun":"605","jimok":"공","area":489.4,"zone":"준공업지역","zoneGroup":"공업","p25":2374200,"p26":2412040,"chg":1.59,"flags":[],"excluded":false}];
+
+</script>
+<script>
+(function () {
+  const all = window.PARCELS;
+  const state = {
+    filters: { dong: [], zone: [], zoneGroup: [], jimok: [], chgMin: null, chgMax: null, search: '' },
+    metric: 'median' // median | mean | sum
+  };
+  const subs = [];
+
+  function match(p, f) {
+    if (f.dong.length && !f.dong.includes(p.dong)) return false;
+    if (f.zone.length && !f.zone.includes(p.zone)) return false;
+    if (f.zoneGroup.length && !f.zoneGroup.includes(p.zoneGroup)) return false;
+    if (f.jimok.length && !f.jimok.includes(p.jimok)) return false;
+    if (f.chgMin !== null && (p.chg === null || p.chg < f.chgMin)) return false;
+    if (f.chgMax !== null && (p.chg === null || p.chg >= f.chgMax)) return false;
+    if (f.search && !p.addr.includes(f.search)) return false;
+    return true;
+  }
+
+  function notify() { subs.forEach(fn => fn(state)); }
+
+  const Store = {
+    all: all,
+    get: () => state,
+    // set({filters:{dong:['철산동']}, metric:'mean'}) — filters는 부분 병합
+    set(partial) {
+      if (partial.filters) Object.assign(state.filters, partial.filters);
+      if (partial.metric) state.metric = partial.metric;
+      notify();
+    },
+    reset() {
+      state.filters = { dong: [], zone: [], zoneGroup: [], jimok: [], chgMin: null, chgMax: null, search: '' };
+      notify();
+    },
+    // 토글: 같은 값을 다시 클릭하면 해제 (차트 클릭 연동용)
+    toggle(key, value) {
+      const arr = state.filters[key];
+      const i = arr.indexOf(value);
+      if (i >= 0) arr.splice(i, 1); else arr.push(value);
+      notify();
+    },
+    subscribe(fn) { subs.push(fn); fn(state); },
+    filtered() { return all.filter(p => match(p, state.filters)); },
+    priced() { return Store.filtered().filter(p => !p.excluded); },
+    // 지표 집계
+    agg(values, metric) {
+      const v = values.filter(x => x !== null && x !== undefined && !isNaN(x)).sort((a, b) => a - b);
+      if (!v.length) return null;
+      metric = metric || state.metric;
+      if (metric === 'sum') return v.reduce((a, b) => a + b, 0);
+      if (metric === 'mean') return v.reduce((a, b) => a + b, 0) / v.length;
+      const m = v.length >> 1;
+      return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+    },
+    metricLabel: () => ({ median: '중앙값', mean: '평균', sum: '합계' }[state.metric]),
+    // 포맷터
+    fmtMan: n => n === null || n === undefined ? '-' : (n / 10000).toLocaleString('ko-KR', { maximumFractionDigits: 1 }) + '만',
+    fmtWon: n => n === null || n === undefined ? '-' : Math.round(n).toLocaleString('ko-KR'),
+    fmtPct: n => n === null || n === undefined ? '-' : (n > 0 ? '+' : '') + n.toFixed(1) + '%',
+    // 색 (CSS 변수에서 읽음)
+    css: name => getComputedStyle(document.documentElement).getPropertyValue(name).trim(),
+    GROUPS: ['주거', '상업', '공업', '녹지'],
+    DONGS: [...new Set(all.map(p => p.dong))],
+    ZONES: [...new Set(all.map(p => p.zone))],
+    JIMOKS: [...new Set(all.map(p => p.jimok).filter(Boolean))],
+    FLAG_LABEL: { missing26: '2026 누락', scale: '자릿수 의심', extreme: '변동 과다', area0: '면적 0', nojimok: '지목 없음', dup: '중복 PNU' }
+  };
+  window.Store = Store;
+})();
+
+</script>
+<script>
+(function () {
+  const el = document.getElementById('filters');
+  function sel(key, label, opts) {
+    return `<select data-k="${key}"><option value="">${label}: 전체</option>${opts.map(o => `<option>${o}</option>`).join('')}</select>`;
+  }
+  el.innerHTML =
+    sel('dong', '법정동', Store.DONGS) +
+    sel('zoneGroup', '용도 그룹', Store.GROUPS) +
+    sel('zone', '용도지역', Store.ZONES) +
+    sel('jimok', '지목', Store.JIMOKS) +
+    '<input id="f-search" placeholder="소재지 검색">' +
+    '<span class="seg" id="f-metric">' +
+    ['median:중앙값', 'mean:평균', 'sum:합계'].map(s => { const [k, l] = s.split(':'); return `<button data-m="${k}">${l}</button>`; }).join('') +
+    '</span><button id="f-reset">초기화</button><span id="f-tags"></span>';
+
+  el.querySelectorAll('select').forEach(s => s.addEventListener('change', () => {
+    Store.set({ filters: { [s.dataset.k]: s.value ? [s.value] : [] } });
+  }));
+  el.querySelector('#f-search').addEventListener('input', e => Store.set({ filters: { search: e.target.value.trim() } }));
+  el.querySelectorAll('#f-metric button').forEach(b => b.addEventListener('click', () => Store.set({ metric: b.dataset.m })));
+  el.querySelector('#f-reset').addEventListener('click', () => { el.querySelector('#f-search').value = ''; Store.reset(); });
+
+  Store.subscribe(st => {
+    el.querySelectorAll('select').forEach(s => { const v = st.filters[s.dataset.k]; s.value = v.length === 1 ? v[0] : ''; });
+    el.querySelectorAll('#f-metric button').forEach(b => b.classList.toggle('on', b.dataset.m === st.metric));
+    const f = st.filters, tags = [];
+    ['dong', 'zoneGroup', 'zone', 'jimok'].forEach(k => f[k].forEach(v => tags.push(`<span class="tag" data-k="${k}" data-v="${v}">${v} ✕</span>`)));
+    if (f.chgMin !== null || f.chgMax !== null) tags.push(`<span class="tag" data-k="chg">변동률 ${f.chgMin ?? '-∞'}~${f.chgMax ?? '∞'}% ✕</span>`);
+    const t = el.querySelector('#f-tags');
+    t.innerHTML = tags.join(' ');
+    t.querySelectorAll('.tag').forEach(g => g.addEventListener('click', () => {
+      if (g.dataset.k === 'chg') Store.set({ filters: { chgMin: null, chgMax: null } }); else Store.toggle(g.dataset.k, g.dataset.v);
+    }));
+  });
+})();
+
+</script>
+<script>
+(function () {
+  const kpiEl = document.getElementById('sec-kpi');
+  const chgEl = document.getElementById('sec-change');
+  if (!kpiEl || !chgEl) return;
+
+  const BINS = [
+    { label: '-10% 미만', min: null, max: -10, side: 'down' },
+    { label: '-10~0%', min: -10, max: 0, side: 'down' },
+    { label: '0~5%', min: 0, max: 5, side: 'up' },
+    { label: '5~10%', min: 5, max: 10, side: 'up' },
+    { label: '10% 이상', min: 10, max: null, side: 'up' }
+  ];
+  const charts = { hist: null, up: null, down: null };
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const won = n => Store.fmtWon(n) + '원';
+  const label = p => p.dong + ' ' + p.jibun;
+
+  chgEl.innerHTML =
+    '<h2>변동률 분석</h2>' +
+    '<p class="desc">2025 → 2026 공시지가 변동률 분포와 상승·하락 상위 필지 (가격 집계 제외 필지 미포함). 분포 막대를 클릭하면 해당 구간으로 필터링됩니다.</p>' +
+    '<div class="grid">' +
+    '<div><h2>변동률 분포</h2><div class="chart-box" id="chg-hist-box"><canvas id="chg-hist"></canvas></div></div>' +
+    '<div></div>' +
+    '<div><h2>상승률 TOP10</h2><div class="chart-box" id="chg-up-box"><canvas id="chg-up"></canvas></div></div>' +
+    '<div><h2>하락률 TOP10</h2><div class="chart-box" id="chg-down-box"><canvas id="chg-down"></canvas></div></div>' +
+    '</div>';
+  // 2열 그리드에서 분포 차트가 전체 폭을 쓰도록 빈 칸 제거
+  chgEl.querySelector('.grid > div:nth-child(2)').remove();
+  chgEl.querySelector('.grid > div:first-child').style.gridColumn = '1 / -1';
+
+  function destroy(k) { if (charts[k]) { charts[k].destroy(); charts[k] = null; } }
+
+  function empty(boxId, on) {
+    const box = document.getElementById(boxId);
+    let m = box.querySelector('.empty-msg');
+    box.querySelector('canvas').style.display = on ? 'none' : '';
+    if (on && !m) {
+      m = document.createElement('div');
+      m.className = 'empty-msg';
+      m.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px';
+      m.textContent = '표시할 데이터가 없습니다';
+      box.appendChild(m);
+    }
+    if (!on && m) m.remove();
+  }
+
+  function axes(horizontal) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    const val = { ticks: { color: muted }, grid: { color: line } };
+    const cat = { ticks: { color: muted }, grid: { display: false } };
+    return horizontal ? { x: val, y: cat } : { x: cat, y: val };
+  }
+
+  function renderKpi(st) {
+    const filtered = Store.filtered();
+    const priced = filtered.filter(p => !p.excluded);
+    const excl = filtered.length - priced.length;
+    const both = priced.filter(p => p.p25 != null && p.p26 != null);
+    const v26 = Store.agg(priced.map(p => p.p26), st.metric);
+    const v25 = Store.agg(both.map(p => p.p25), st.metric);
+    const v26b = Store.agg(both.map(p => p.p26), st.metric);
+    const delta = v25 && v26b !== null ? (v26b / v25 - 1) * 100 : null;
+    const cls = delta === null ? '' : delta > 0 ? 'up' : delta < 0 ? 'down' : '';
+    const arrow = delta === null ? '' : delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
+    const withChg = priced.filter(p => p.chg !== null && p.chg !== undefined);
+    const ups = withChg.filter(p => p.chg > 0).length;
+    const downs = withChg.filter(p => p.chg < 0).length;
+    const pct = n => withChg.length ? (n / withChg.length * 100).toFixed(1) + '%' : '-';
+    let top = null;
+    priced.forEach(p => { if (p.p26 != null && (!top || p.p26 > top.p26)) top = p; });
+    const unit = st.metric === 'sum' ? ' (원, 합계)' : '/㎡';
+
+    kpiEl.innerHTML =
+      `<div class="kpi"><div class="label">전체 필지 수</div>` +
+      `<div class="value">${filtered.length.toLocaleString('ko-KR')}필지</div>` +
+      `<div class="delta" style="color:var(--muted)">${excl ? `가격 집계 제외 ${excl.toLocaleString('ko-KR')}필지` : '가격 집계 제외 없음'}</div></div>` +
+
+      `<div class="kpi"><div class="label">2026 공시지가 ${Store.metricLabel()}</div>` +
+      `<div class="value">${v26 === null ? '-' : Store.fmtMan(v26)}</div>` +
+      `<div class="delta ${cls}">${delta === null ? '2025 대비 -' : `${arrow}2025 대비 ${Store.fmtPct(delta)}`}` +
+      `<span style="color:var(--muted)"> · 원${st.metric === 'sum' ? '' : '/㎡'}</span></div></div>` +
+
+      `<div class="kpi"><div class="label">상승 · 하락 필지</div>` +
+      `<div class="value"><span class="up">${ups.toLocaleString('ko-KR')}</span> / <span class="down">${downs.toLocaleString('ko-KR')}</span></div>` +
+      `<div class="delta"><span class="up">상승 ${pct(ups)}</span> · <span class="down">하락 ${pct(downs)}</span></div></div>` +
+
+      `<div class="kpi"><div class="label">최고가 필지 (2026)</div>` +
+      `<div class="value">${top ? Store.fmtMan(top.p26) : '-'}</div>` +
+      `<div class="delta" style="color:var(--muted)">${top ? esc(top.addr) + ' · ' + won(top.p26) + '/㎡' : '표시할 데이터가 없습니다'}</div></div>`;
+  }
+
+  function renderHist(st) {
+    // 변동률 필터 자체는 분포에서 제외해 전체 구간을 계속 보여준다
+    const f = st.filters, sMin = f.chgMin, sMax = f.chgMax;
+    f.chgMin = null; f.chgMax = null;
+    let base;
+    try { base = Store.priced(); } finally { f.chgMin = sMin; f.chgMax = sMax; }
+    base = base.filter(p => p.chg !== null && p.chg !== undefined);
+
+    destroy('hist');
+    empty('chg-hist-box', base.length === 0);
+    if (!base.length) return;
+
+    const counts = BINS.map(b => base.filter(p => (b.min === null || p.chg >= b.min) && (b.max === null || p.chg < b.max)).length);
+    const up = Store.css('--up'), down = Store.css('--down');
+    const activeIdx = BINS.findIndex(b => b.min === sMin && b.max === sMax);
+    const anyActive = sMin !== null || sMax !== null;
+    const colors = BINS.map((b, i) => {
+      const c = b.side === 'down' ? down : up;
+      return anyActive && i !== activeIdx ? c + '55' : c;
+    });
+
+    charts.hist = new Chart(document.getElementById('chg-hist'), {
+      type: 'bar',
+      data: { labels: BINS.map(b => b.label), datasets: [{ label: '필지 수', data: counts, backgroundColor: colors, borderRadius: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${c.parsed.y.toLocaleString('ko-KR')}필지 (${(c.parsed.y / base.length * 100).toFixed(1)}%)` } }
+        },
+        scales: axes(false),
+        onClick: (e, els) => {
+          if (!els.length) return;
+          const b = BINS[els[0].index];
+          const cur = Store.get().filters;
+          if (cur.chgMin === b.min && cur.chgMax === b.max) Store.set({ filters: { chgMin: null, chgMax: null } });
+          else Store.set({ filters: { chgMin: b.min, chgMax: b.max } });
+        },
+        onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
+    });
+  }
+
+  function renderTop(key, canvasId, boxId, rows, color) {
+    destroy(key);
+    empty(boxId, rows.length === 0);
+    if (!rows.length) return;
+    charts[key] = new Chart(document.getElementById(canvasId), {
+      type: 'bar',
+      data: { labels: rows.map(label), datasets: [{ label: '변동률', data: rows.map(p => +p.chg.toFixed(2)), backgroundColor: color, borderRadius: 4 }] },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => '변동률 ' + Store.fmtPct(c.parsed.x),
+              afterLabel: c => {
+                const p = rows[c.dataIndex];
+                return ['2025: ' + won(p.p25) + '/㎡', '2026: ' + won(p.p26) + '/㎡'];
+              }
+            }
+          }
+        },
+        scales: axes(true)
+      }
+    });
+  }
+
+  function renderRank() {
+    const withChg = Store.priced().filter(p => p.chg !== null && p.chg !== undefined);
+    const upRows = withChg.filter(p => p.chg > 0).sort((a, b) => b.chg - a.chg).slice(0, 10);
+    const downRows = withChg.filter(p => p.chg < 0).sort((a, b) => a.chg - b.chg).slice(0, 10);
+    renderTop('up', 'chg-up', 'chg-up-box', upRows, Store.css('--up'));
+    renderTop('down', 'chg-down', 'chg-down-box', downRows, Store.css('--down'));
+  }
+
+  function render(st) {
+    renderKpi(st);
+    renderHist(st);
+    renderRank();
+  }
+
+  Store.subscribe(render);
+
+  // 다크모드 전환 시 색 재적용
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const h = () => render(Store.get());
+    if (mq.addEventListener) mq.addEventListener('change', h);
+  }
+})();
+
+</script>
+<script>
+(function () {
+  const rootC = document.getElementById('sec-compare');
+  const rootD = document.getElementById('sec-explore');
+  if (!rootC || !rootD) return;
+
+  const GROUP_VAR = { '주거': '--g-res', '상업': '--g-com', '공업': '--g-ind', '녹지': '--g-grn' };
+  const MIN_N = 10;
+  const charts = {};
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function gcolor(g) { return Store.css(GROUP_VAR[g] || '--neutral'); }
+  function alpha(c, a) {
+    c = (c || '').trim();
+    let m = /^#([0-9a-f]{6})$/i.exec(c);
+    if (m) {
+      const n = parseInt(m[1], 16);
+      return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+    }
+    m = /^#([0-9a-f]{3})$/i.exec(c);
+    if (m) {
+      const h = m[1];
+      return `rgba(${parseInt(h[0] + h[0], 16)},${parseInt(h[1] + h[1], 16)},${parseInt(h[2] + h[2], 16)},${a})`;
+    }
+    return c;
+  }
+  function groupBy(arr, fn) {
+    const m = new Map();
+    arr.forEach(p => { const k = fn(p); if (k === '' || k === null || k === undefined) return; if (!m.has(k)) m.set(k, []); m.get(k).push(p); });
+    return m;
+  }
+
+  function card(parent, cls, title, desc, withCanvas, height) {
+    const d = document.createElement('div');
+    d.className = 'card' + (cls ? ' ' + cls : '');
+    d.innerHTML = `<h2>${title}</h2><p class="desc"></p>` +
+      (withCanvas ? `<div class="chart-box"${height ? ` style="height:${height}px"` : ''}><canvas></canvas><div class="empty-msg" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--muted);font-size:13px;background:var(--card)">표시할 데이터가 없습니다</div></div>` : '<div class="body"></div>');
+    d.querySelector('.desc').textContent = desc;
+    parent.appendChild(d);
+    return d;
+  }
+
+  const cDong = card(rootC, 'full', '법정동별 공시지가', '', true, 320);
+  const cZone = card(rootC, '', '용도지역별 변동률', '', true, 300);
+  const cJimok = card(rootC, '', '지목별 필지 수', '', true, 300);
+  const cScatter = card(rootD, 'full', '면적 × 공시지가 산점도', '가로 면적(㎡), 세로 2026 공시지가(원/㎡), 모두 로그 스케일 · 면적 0·제외 필지 미표시', true, 380);
+  const cHeat = card(rootD, 'full', '법정동 × 용도지역 히트맵', '', false);
+
+  function setEmpty(c, empty) {
+    const e = c.querySelector('.empty-msg');
+    if (e) e.style.display = empty ? 'flex' : 'none';
+  }
+
+  function baseOpts(extra) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    return Object.assign({
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { labels: { color: muted, boxWidth: 12 } } }
+    }, extra || {}, { _muted: muted, _line: line });
+  }
+  function axis(muted, line, extra) {
+    return Object.assign({ ticks: { color: muted }, grid: { color: line }, border: { color: line } }, extra || {});
+  }
+
+  function render(key, c, cfg, empty) {
+    setEmpty(c, empty);
+    if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+    if (empty) return;
+    charts[key] = new Chart(c.querySelector('canvas'), cfg);
+  }
+
+  function setHeight(c, n, perBar, min) {
+    c.querySelector('.chart-box').style.height = Math.max(min, n * perBar + 60) + 'px';
+  }
+
+  /* ---------- C-1 법정동별 ---------- */
+  function drawDong(st, data) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    const g = groupBy(data, p => p.dong);
+    const dongs = Store.DONGS.filter(d => g.has(d));
+    const ml = Store.metricLabel();
+    cDong.querySelector('.desc').textContent = `법정동별 ${ml} 공시지가 · 2025 vs 2026 (원/㎡, 만 원 표기) · 막대를 클릭하면 해당 동으로 필터`;
+    const v25 = dongs.map(d => Store.agg(g.get(d).map(p => p.p25), st.metric));
+    const v26 = dongs.map(d => Store.agg(g.get(d).map(p => p.p26), st.metric));
+    const sel = st.filters.dong;
+    render('dong', cDong, {
+      type: 'bar',
+      data: {
+        labels: dongs,
+        datasets: [
+          { label: '2025', data: v25, backgroundColor: alpha(Store.css('--neutral'), 0.85) },
+          { label: '2026', data: v26, backgroundColor: dongs.map(d => !sel.length || sel.includes(d) ? Store.css('--up') : alpha(Store.css('--up'), 0.35)) }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { labels: { color: muted, boxWidth: 12 } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${Store.fmtMan(ctx.parsed.y)} (${Store.fmtWon(ctx.parsed.y)}원/㎡)` } }
+        },
+        scales: {
+          x: axis(muted, line),
+          y: axis(muted, line, { beginAtZero: true, ticks: { color: muted, callback: v => Store.fmtMan(v) } })
+        },
+        onClick: (e, els) => { if (els.length) Store.toggle('dong', dongs[els[0].index]); },
+        onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
+    }, !dongs.length);
+  }
+
+  /* ---------- C-2 용도지역별 변동률 ---------- */
+  function drawZone(st, data) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    const g = groupBy(data, p => p.zone);
+    const metric = st.metric === 'sum' ? 'mean' : st.metric;
+    const mlabel = metric === 'mean' ? '평균' : '중앙값';
+    cZone.querySelector('.desc').textContent = `용도지역별 ${mlabel} 변동률(%)` + (st.metric === 'sum' ? ' (합계 선택 시 평균으로 표시)' : '') + ` · 필지 ${MIN_N}개 미만은 흐리게 표시 · 클릭 시 필터`;
+    let rows = [...g.entries()].map(([z, arr]) => ({
+      zone: z, n: arr.length, group: arr[0].zoneGroup,
+      v: Store.agg(arr.map(p => p.chg), metric)
+    })).filter(r => r.v !== null);
+    rows.sort((a, b) => b.v - a.v);
+    setHeight(cZone, rows.length, 28, 300);
+    const sel = st.filters.zone;
+    render('zone', cZone, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.n < MIN_N ? `${r.zone} (n=${r.n})` : r.zone),
+        datasets: [{
+          label: `${mlabel} 변동률`, data: rows.map(r => r.v),
+          backgroundColor: rows.map(r => {
+            const dim = r.n < MIN_N || (sel.length && !sel.includes(r.zone));
+            return alpha(gcolor(r.group), dim ? 0.35 : 1);
+          })
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => `${mlabel} 변동률: ${Store.fmtPct(ctx.parsed.x)} · ${rows[ctx.dataIndex].group} · ${rows[ctx.dataIndex].n}필지` } }
+        },
+        scales: {
+          x: axis(muted, line, { ticks: { color: muted, callback: v => v + '%' } }),
+          y: axis(muted, line)
+        },
+        onClick: (e, els) => { if (els.length) Store.toggle('zone', rows[els[0].index].zone); },
+        onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
+    }, !rows.length);
+  }
+
+  /* ---------- C-3 지목별 필지 수 ---------- */
+  function drawJimok(st, filt) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    cJimok.querySelector('.desc').textContent = '지목별 필지 수 (지목 없음 제외, 제외 필지 포함) · 클릭 시 필터';
+    const g = groupBy(filt, p => p.jimok);
+    const rows = [...g.entries()].map(([j, arr]) => ({ j, n: arr.length })).sort((a, b) => b.n - a.n);
+    setHeight(cJimok, rows.length, 28, 300);
+    const sel = st.filters.jimok;
+    const base = Store.css('--g-res');
+    render('jimok', cJimok, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.j),
+        datasets: [{ label: '필지 수', data: rows.map(r => r.n), backgroundColor: rows.map(r => !sel.length || sel.includes(r.j) ? base : alpha(base, 0.35)) }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toLocaleString('ko-KR')}필지` } } },
+        scales: { x: axis(muted, line, { beginAtZero: true }), y: axis(muted, line) },
+        onClick: (e, els) => { if (els.length) Store.toggle('jimok', rows[els[0].index].j); },
+        onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
+    }, !rows.length);
+  }
+
+  /* ---------- D-1 산점도 ---------- */
+  function drawScatter(st, data) {
+    const muted = Store.css('--muted'), line = Store.css('--line');
+    const pts = data.filter(p => !p.excluded && p.area > 0 && p.p26 > 0 && !(p.flags || []).includes('area0'));
+    const datasets = Store.GROUPS.map(g => ({
+      label: g,
+      data: pts.filter(p => p.zoneGroup === g).map(p => ({ x: p.area, y: p.p26, p })),
+      backgroundColor: alpha(gcolor(g), 0.7), borderColor: gcolor(g), pointRadius: 4, pointHoverRadius: 6
+    })).filter(d => d.data.length);
+    render('scatter', cScatter, {
+      type: 'scatter',
+      data: { datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { labels: { color: muted, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              title: items => items.length ? items[0].raw.p.addr : '',
+              label: ctx => {
+                const p = ctx.raw.p;
+                return [`용도지역: ${p.zone} (${p.zoneGroup})`, `면적: ${p.area.toLocaleString('ko-KR')}㎡`, `2026: ${Store.fmtWon(p.p26)}원/㎡ (${Store.fmtMan(p.p26)})`];
+              }
+            }
+          }
+        },
+        scales: {
+          x: axis(muted, line, { type: 'logarithmic', title: { display: true, text: '면적 (㎡)', color: muted }, ticks: { color: muted, callback: v => [1, 10, 100, 1000, 10000, 100000].includes(v) ? v.toLocaleString('ko-KR') : '' } }),
+          y: axis(muted, line, { type: 'logarithmic', title: { display: true, text: '2026 공시지가 (원/㎡)', color: muted }, ticks: { color: muted, callback: v => { const l = Math.log10(v); return Math.abs(l - Math.round(l)) < 1e-9 || [2, 5].includes(v / Math.pow(10, Math.floor(l))) ? Store.fmtMan(v) : ''; } } })
+        }
+      }
+    }, !pts.length);
+  }
+
+  /* ---------- D-2 히트맵 ---------- */
+  function drawHeat(st, data) {
+    const ml = Store.metricLabel();
+    cHeat.querySelector('h2').textContent = '법정동 × 용도지역 히트맵';
+    cHeat.querySelector('.desc').textContent = `2026 공시지가 ${ml} (만 원/㎡) · 셀 색 진할수록 높음 · 셀 클릭 시 해당 동·용도지역으로 필터`;
+    const body = cHeat.querySelector('.body');
+    if (!data.length) { body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">표시할 데이터가 없습니다</div>'; return; }
+    const dongs = Store.DONGS.filter(d => data.some(p => p.dong === d));
+    const zoneGroupOf = {};
+    data.forEach(p => { zoneGroupOf[p.zone] = p.zoneGroup; });
+    const zones = Object.keys(zoneGroupOf).sort((a, b) => Store.GROUPS.indexOf(zoneGroupOf[a]) - Store.GROUPS.indexOf(zoneGroupOf[b]) || a.localeCompare(b, 'ko'));
+    const cell = new Map();
+    groupBy(data, p => p.dong + '\u0001' + p.zone).forEach((arr, k) => { cell.set(k, { v: Store.agg(arr.map(p => p.p26), st.metric), n: arr.length }); });
+    let min = Infinity, max = -Infinity;
+    cell.forEach(c => { if (c.v !== null) { min = Math.min(min, c.v); max = Math.max(max, c.v); } });
+    const span = max - min;
+    const th = 'style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-weight:600"';
+    let html = '<div class="table-scroll" style="max-height:none;overflow-x:auto"><table class="data" style="border-collapse:separate;border-spacing:2px"><thead><tr><th ' + th + '>법정동</th>' +
+      zones.map(z => `<th ${th.replace('border-bottom:1px solid var(--line);', `border-bottom:3px solid ${gcolor(zoneGroupOf[z])};`)}>${esc(z)}</th>`).join('') + '</tr></thead><tbody>';
+    dongs.forEach(d => {
+      html += `<tr><th style="text-align:left;white-space:nowrap;padding:6px 8px;position:static;cursor:default">${esc(d)}</th>`;
+      zones.forEach(z => {
+        const c = cell.get(d + '\u0001' + z);
+        if (!c || c.v === null) {
+          html += '<td style="text-align:center;color:var(--muted);padding:6px 8px;border:none">-</td>';
+        } else {
+          const t = span > 0 ? (c.v - min) / span : 1;
+          const bg = alpha(gcolor(zoneGroupOf[z]), (0.12 + 0.78 * t).toFixed(2));
+          html += `<td data-d="${esc(d)}" data-z="${esc(z)}" title="${esc(d)} · ${esc(z)} · ${c.n}필지 · ${Store.fmtWon(c.v)}원/㎡" style="text-align:center;padding:6px 8px;border:none;border-radius:6px;cursor:pointer;background:${bg};color:var(--text);font-weight:${t > 0.6 ? 700 : 400}">${Store.fmtMan(c.v).replace('만', '')}</td>`;
+        }
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
+  }
+
+  cHeat.addEventListener('click', e => {
+    const td = e.target.closest('td[data-d]');
+    if (td) Store.set({ filters: { dong: [td.dataset.d], zone: [td.dataset.z] } });
+  });
+
+  Store.subscribe(st => {
+    const filt = Store.filtered();
+    const data = Store.priced();
+    drawDong(st, data);
+    drawZone(st, data);
+    drawJimok(st, filt);
+    drawScatter(st, data);
+    drawHeat(st, data);
+  });
+})();
+
+</script>
+<script>
+(function () {
+  const PAGE = 100;
+  const tableEl = document.getElementById('sec-table');
+  const qualEl = document.getElementById('sec-quality');
+
+  function h(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function badges(flags) {
+    const frag = document.createDocumentFragment();
+    (flags || []).forEach(f => frag.appendChild(h('span', 'badge', Store.FLAG_LABEL[f] || f)));
+    return frag;
+  }
+  function td(text, cls) { return h('td', cls, text); }
+  function chgCell(chg) {
+    const c = td(Store.fmtPct(chg), 'num');
+    if (chg !== null && chg !== undefined) {
+      if (chg > 0) c.classList.add('up'); else if (chg < 0) c.classList.add('down');
+    }
+    return c;
+  }
+
+  /* ---------- 상세 테이블 ---------- */
+  const COLS = [
+    { key: 'addr', label: '소재지', num: false },
+    { key: 'jimok', label: '지목', num: false },
+    { key: 'area', label: '면적(㎡)', num: true },
+    { key: 'zone', label: '용도지역', num: false },
+    { key: 'p25', label: '2025', num: true },
+    { key: 'p26', label: '2026', num: true },
+    { key: 'chg', label: '변동률', num: true }
+  ];
+  let sort = { key: 'chg', dir: -1 };
+  let shown = PAGE;
+  let rows = [];
+
+  let titleCount, thead, tbody, moreWrap, emptyMsg;
+
+  function buildTableShell() {
+    tableEl.textContent = '';
+    const h2 = h('h2', null, '필지 상세 ');
+    titleCount = h('span', 'desc');
+    titleCount.style.marginLeft = '6px';
+    h2.appendChild(titleCount);
+    tableEl.appendChild(h2);
+    tableEl.appendChild(h('p', 'desc', '헤더를 클릭하면 정렬됩니다. 가격 집계 제외 필지도 경고 배지와 함께 표시됩니다.'));
+
+    const wrap = h('div', 'table-scroll');
+    const table = h('table', 'data');
+    thead = h('thead');
+    tbody = h('tbody');
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    tableEl.appendChild(wrap);
+
+    emptyMsg = h('p', 'desc', '조건에 맞는 필지가 없습니다');
+    emptyMsg.style.display = 'none';
+    emptyMsg.style.padding = '12px 0';
+    tableEl.appendChild(emptyMsg);
+
+    moreWrap = h('div');
+    moreWrap.style.cssText = 'text-align:center;margin-top:12px';
+    tableEl.appendChild(moreWrap);
+  }
+
+  function renderHead() {
+    thead.textContent = '';
+    const tr = h('tr');
+    COLS.forEach(c => {
+      const th = h('th', c.num ? 'num' : '', c.label + (sort.key === c.key ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''));
+      th.addEventListener('click', () => {
+        if (sort.key === c.key) sort.dir = -sort.dir;
+        else sort = { key: c.key, dir: c.num ? -1 : 1 };
+        shown = PAGE;
+        applySort();
+        renderHead();
+        renderBody();
+      });
+      tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+  }
+
+  function applySort() {
+    const k = sort.key, d = sort.dir;
+    rows.sort((a, b) => {
+      const x = a[k], y = b[k];
+      const xn = x === null || x === undefined || x === '';
+      const yn = y === null || y === undefined || y === '';
+      if (xn && yn) return 0;
+      if (xn) return 1;   // null은 항상 맨 뒤
+      if (yn) return -1;
+      if (typeof x === 'string') return d * x.localeCompare(y, 'ko');
+      return d * (x - y);
+    });
+  }
+
+  function renderBody() {
+    tbody.textContent = '';
+    moreWrap.textContent = '';
+    emptyMsg.style.display = rows.length ? 'none' : '';
+    const frag = document.createDocumentFragment();
+    rows.slice(0, shown).forEach(p => {
+      const tr = h('tr');
+      const a = td(p.addr);
+      if (p.flags && p.flags.length) { a.appendChild(document.createTextNode(' ')); a.appendChild(badges(p.flags)); }
+      tr.appendChild(a);
+      tr.appendChild(td(p.jimok || '-'));
+      tr.appendChild(td(Store.fmtWon(p.area), 'num'));
+      tr.appendChild(td(p.zone || '-'));
+      tr.appendChild(td(Store.fmtWon(p.p25), 'num'));
+      tr.appendChild(td(Store.fmtWon(p.p26), 'num'));
+      tr.appendChild(chgCell(p.chg));
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+    if (rows.length > shown) {
+      const remain = rows.length - shown;
+      const btn = h('button', null, '더 보기 (' + Math.min(PAGE, remain) + '건 추가 · 남은 ' + remain.toLocaleString('ko-KR') + '건)');
+      btn.style.cssText = 'font:inherit;font-size:13px;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);cursor:pointer';
+      btn.addEventListener('click', () => { shown += PAGE; renderBody(); });
+      moreWrap.appendChild(btn);
+    }
+  }
+
+  function renderTable() {
+    rows = Store.filtered().slice();
+    shown = PAGE;
+    titleCount.textContent = '· ' + rows.length.toLocaleString('ko-KR') + '건';
+    applySort();
+    renderHead();
+    renderBody();
+  }
+
+  /* ---------- 데이터 품질 점검 (필터 무관, 1회) ---------- */
+  function renderQuality() {
+    qualEl.textContent = '';
+    const all = Store.all;
+    const flagged = all.filter(p => p.flags && p.flags.length);
+    const excluded = all.filter(p => p.excluded).length;
+
+    qualEl.appendChild(h('h2', null, '데이터 품질 점검'));
+    qualEl.appendChild(h('p', 'desc',
+      '전체 ' + all.length.toLocaleString('ko-KR') + '필지 기준(필터 무관). 가격 집계 제외 ' + excluded + '건 — 가격·변동률 통계에서 빠지며, 면적 0·지목 없음은 가격 집계에는 포함되고 면적/지목 차트에서만 제외됩니다. ' +
+      '자릿수 의심(scale)은 2026 값이 2025의 1% 미만인 경우입니다.'));
+
+    const counts = h('div');
+    counts.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px';
+    Object.keys(Store.FLAG_LABEL).forEach(f => {
+      const n = all.filter(p => p.flags && p.flags.includes(f)).length;
+      const chip = h('span', 'badge', Store.FLAG_LABEL[f] + ' ' + n + '건');
+      if (!n) chip.style.opacity = '0.5';
+      counts.appendChild(chip);
+    });
+    qualEl.appendChild(counts);
+
+    if (!flagged.length) {
+      qualEl.appendChild(h('p', 'desc', '플래그가 있는 필지가 없습니다'));
+      return;
+    }
+    const wrap = h('div', 'table-scroll');
+    wrap.style.maxHeight = '360px';
+    const table = h('table', 'data');
+    const hr = h('tr');
+    [['소재지', 0], ['지목', 0], ['2025', 1], ['2026', 1], ['플래그', 0]].forEach(c => {
+      const th = h('th', c[1] ? 'num' : '', c[0]);
+      th.style.cursor = 'default';
+      hr.appendChild(th);
+    });
+    const thead = h('thead'); thead.appendChild(hr);
+    const body = h('tbody');
+    flagged.forEach(p => {
+      const tr = h('tr');
+      tr.appendChild(td(p.addr));
+      tr.appendChild(td(p.jimok || '-'));
+      tr.appendChild(td(Store.fmtWon(p.p25), 'num'));
+      tr.appendChild(td(Store.fmtWon(p.p26), 'num'));
+      const f = td(''); f.appendChild(badges(p.flags)); tr.appendChild(f);
+      body.appendChild(tr);
+    });
+    table.appendChild(thead); table.appendChild(body);
+    wrap.appendChild(table);
+    qualEl.appendChild(wrap);
+  }
+
+  if (tableEl) {
+    buildTableShell();
+    Store.subscribe(renderTable);
+  }
+  if (qualEl) renderQuality();
+})();
+
+</script>
+</body>
+</html>
